@@ -21,8 +21,8 @@ import {
  * Reminder/announcement service: builds snapshot messages, resolves GIF media, and dispatches alerts.
  */
 
-function resolveReminderChannelId(db: BotDb, envChannelId?: string): string | undefined {
-    return db.getSetting("reminder_channel_id") ?? envChannelId;
+function resolveReminderChannelId(db: BotDb): string | undefined {
+    return db.getSetting("reminder_channel_id");
 }
 
 interface ReminderOptions {
@@ -939,11 +939,10 @@ async function sendTimedUpcomingAlerts(
 export async function sendActiveDropReminders(
     client: Client,
     db: BotDb,
-    envChannelId?: string,
     options?: ReminderOptions
 ) {
     const totalStartMs = nowMs();
-    const reminderChannelId = resolveReminderChannelId(db, envChannelId);
+    const reminderChannelId = resolveReminderChannelId(db);
     if (!reminderChannelId) {
         return;
     }

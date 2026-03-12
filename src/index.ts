@@ -39,8 +39,7 @@ client.once(Events.ClientReady, (readyClient) => {
         client,
         db,
         providers,
-        intervalMs: config.CHECK_INTERVAL_MS,
-        envChannelId: config.REMINDER_CHANNEL_ID
+        intervalMs: config.CHECK_INTERVAL_MS
     });
 });
 
@@ -50,8 +49,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await handleChatInputCommand(interaction, {
                 client,
                 db,
-                providers,
-                envChannelId: config.REMINDER_CHANNEL_ID
+                providers
             });
             return;
         }

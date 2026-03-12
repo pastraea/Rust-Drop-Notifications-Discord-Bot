@@ -82,11 +82,8 @@ Setup:
 | `DISCORD_TOKEN` | Yes | Bot token used to log in |
 | `DISCORD_CLIENT_ID` | For deploy script | Application id for slash-command registration |
 | `DISCORD_GUILD_ID` | For deploy script | Target guild for command registration |
-| `REMINDER_CHANNEL_ID` | Optional | Fallback reminder channel if DB setting not set |
 | `DATABASE_PATH` | Optional | SQLite file path (`./data/bot.db` default) |
 | `CHECK_INTERVAL_MS` | Optional | Scheduler interval in ms (`300000` default) |
-| `TWITCH_CLIENT_ID` | Optional | Enables richer Twitch API data |
-| `TWITCH_CLIENT_SECRET` | Optional | Enables richer Twitch API data |
 | `TWITCH_MOCK_DROPS` | Optional | Use mock Twitch data (`true`/`false`) |
 | `KICK_MOCK_DROPS` | Optional | Use mock Kick data (`true`/`false`) |
 
@@ -110,7 +107,7 @@ Common issues and fixes:
    - Confirm bot has `applications.commands` scope in the guild.
 
 3. No drop alerts are sent.
-   - Ensure reminder channel is configured (`/setchannel`) or `REMINDER_CHANNEL_ID` is set.
+   - Ensure reminder channel is configured with `/setchannel`.
    - Confirm alert toggles with `/alerts status`.
    - Check provider mode (mock vs live) and provider source mode output.
 

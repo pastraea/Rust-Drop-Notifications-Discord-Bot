@@ -1,7 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
-    CLOSING_PHRASE_COMMAND,
-    LEGACY_CLOSING_PHRASE_ALIAS
+    CLOSING_PHRASE_COMMAND
 } from "./commandNames.js";
 
 /**
@@ -33,7 +32,6 @@ export const commandDefinitions = [
             opt.setName("channel").setDescription("Target reminder channel").setRequired(true)
         ),
     buildClosingPhraseCommand(CLOSING_PHRASE_COMMAND),
-    buildClosingPhraseCommand(LEGACY_CLOSING_PHRASE_ALIAS),
     new SlashCommandBuilder()
         .setName("alerts")
         .setDescription("Manage your automated drop ping preferences")
