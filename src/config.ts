@@ -10,7 +10,6 @@ dotenv.config();
 const BaseEnvSchema = z.object({
     DISCORD_TOKEN: z.string().min(1),
     DISCORD_PUBLIC_KEY: z.string().optional(),
-    REMINDER_CHANNEL_ID: z.string().optional(),
     DATABASE_PATH: z.string().default("./data/bot.db"),
     CHECK_INTERVAL_MS: z
         .string()

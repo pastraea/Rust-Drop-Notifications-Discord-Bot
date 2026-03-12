@@ -35,7 +35,6 @@ export interface InteractionDeps {
     client: Client;
     db: BotDb;
     providers: DropsProvider[];
-    envChannelId?: string;
 }
 
 const TENOR_VIEW_URL_REGEX = /^https:\/\/tenor\.com\/view\/[a-z0-9\-]+/i;
@@ -51,6 +50,7 @@ const RESET_SECRETS_YES_BUTTON_PREFIX = "secrets-reset-yes";
 const RESET_SECRETS_NO_BUTTON_PREFIX = "secrets-reset-no";
 const TENOR_MEDIA_CACHE_TTL_MS = 10 * 60 * 1000;
 const ALL_ALERT_TYPES: AlertType[] = ["alert_24h_6am", "alert_12h_6pm", "alert_1h", "alert_checkdrops"];
+const MAX_GIF_LIST_PREVIEW_ATTACHMENTS = 2;
 const ALERT_TYPE_TOKEN_MAP = new Map<string, AlertType>([
     ["24h", "alert_24h_6am"],
     ["6am", "alert_24h_6am"],
@@ -912,28 +912,38 @@ export async function handleChatInputCommand(
             const page = Math.min(Math.max(requestedPage, 1), totalPages);
             const start = (page - 1) * GIF_LIST_PAGE_SIZE;
             const pageItems = gifs.slice(start, start + GIF_LIST_PAGE_SIZE);
+            const previewItems = pageItems.slice(0, MAX_GIF_LIST_PREVIEW_ATTACHMENTS);
 
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const previewResults = await Promise.all(
-                pageItems.map((gif) =>
+                previewItems.map((gif) =>
                     buildGifAttachmentFromViewUrl(gif.viewUrl, `custom-gif-${gif.id}.gif`)
                 )
             );
             const previews = previewResults.filter((attachment) => attachment !== undefined);
 
             const lines = pageItems.map(
-                (gif) => `**#${gif.id}** - ${gif.displayName ?? "Custom GIF"} (${gif.createdAt})`
+                (gif) => `**#${gif.id}** - ${gif.displayName ?? "Custom GIF"} (${gif.createdAt})\n${gif.viewUrl}`
             );
-            await interaction.editReply({
-                content: [
-                    `**Your custom GIFs** (page ${page}/${totalPages}):`,
-                    ...lines,
-                    `Preview attachments: ${previews.length}/${pageItems.length}`,
-                    "Use /gifs remove id:<gif_id> to delete one."
-                ].join("\n"),
-                files: previews
-            });
+
+            const content = [
+                `**Your custom GIFs** (page ${page}/${totalPages}):`,
+                ...lines,
+                `Preview attachments: ${previews.length}/${previewItems.length} (max ${MAX_GIF_LIST_PREVIEW_ATTACHMENTS} per page)`,
+                "Use /gifs remove id:<gif_id> to delete one."
+            ].join("\n");
+
+            try {
+                await interaction.editReply({
+                    content,
+                    files: previews
+                });
+            } catch {
+                await interaction.editReply({
+                    content: `${content}\n\nPreview attachments were skipped due to upload limits.`
+                });
+            }
             return;
         }
     }
@@ -947,8 +957,7 @@ export async function handleChatInputCommand(
             client: deps.client,
             db: deps.db,
             providers: deps.providers,
-            intervalMs: 0,
-            envChannelId: deps.envChannelId
+            intervalMs: 0
         }, {
             forceAnnounce: true,
             forceAnnounceMode: checkdropsMode

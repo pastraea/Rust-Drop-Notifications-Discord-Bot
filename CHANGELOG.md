@@ -8,6 +8,18 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.1.2] - 2026-03-12
+
+### Fixed
+
+- `/gifs list` no longer falls over with larger custom GIF collections; preview uploads are capped and now gracefully fall back to text output when attachment upload limits are hit.
+
+### Changed
+
+- Removed duplicate closing-phrase slash command registration so only `/closingphrase` is published.
+- Removed `REMINDER_CHANNEL_ID` runtime/env fallback behavior; reminder channel is now DB-backed via `/setchannel` only.
+- Updated `.env.example` and README environment docs to match current runtime configuration.
+
 ## [0.1.1] - 2026-03-12
 
 ### Fixed

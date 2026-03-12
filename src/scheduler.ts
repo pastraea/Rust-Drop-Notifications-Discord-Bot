@@ -16,7 +16,6 @@ export interface SchedulerDeps {
     db: BotDb;
     providers: DropsProvider[];
     intervalMs: number;
-    envChannelId?: string;
 }
 
 /**
@@ -32,7 +31,7 @@ export interface RunCycleOptions {
  */
 export async function runDropsCycle(deps: SchedulerDeps, options?: RunCycleOptions) {
     await syncDrops(deps.db, deps.providers);
-    await sendActiveDropReminders(deps.client, deps.db, deps.envChannelId, {
+    await sendActiveDropReminders(deps.client, deps.db, {
         forceAnnounce: options?.forceAnnounce,
         forceAnnounceMode: options?.forceAnnounceMode,
         intervalMs: deps.intervalMs
