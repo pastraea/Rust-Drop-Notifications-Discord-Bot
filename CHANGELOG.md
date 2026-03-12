@@ -6,6 +6,14 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [0.1.1] - 2026-03-12
+
+### Fixed
+
+- `/checkdrops` announcements now always include a GIF outcome: attachment when media fetch succeeds, or a mode-selected GIF link fallback when attachment cannot be sent.
+
 ### Added
 
 - CI workflow for install, build, and test.

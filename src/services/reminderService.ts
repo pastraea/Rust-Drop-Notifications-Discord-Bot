@@ -413,13 +413,48 @@ async function getRandomRustMemeMediaGifUrl(
 async function sendMemeNotification(
     textChannel: TextChannel,
     db: BotDb,
-    lines: string[]
+    lines: string[],
+    options?: { requireGif?: boolean }
 ): Promise<void> {
     const { mediaGifUrl } = await getRandomRustMemeMediaGifUrl(db);
-    const content = lines.join("\n");
+    const baseContent = lines.join("\n");
+
+    const buildFallbackContent = (): string => {
+        if (!options?.requireGif) {
+            return baseContent;
+        }
+
+        let mode = db.getGifMode();
+        const defaultPool = Array.from(
+            new Set(APPROVED_RUST_GIF_VIEW_URLS.map((url) => normalizeTenorViewUrl(url)).filter(isValidTenorViewUrl))
+        );
+        const sharedCustomPool = Array.from(
+            new Set(db.listAllCustomGifViewUrls().map((url) => normalizeTenorViewUrl(url)).filter(isValidTenorViewUrl))
+        );
+
+        if ((mode === "custom" || mode === "both") && sharedCustomPool.length === 0) {
+            mode = "default";
+        }
+
+        const fallbackPool =
+            mode === "custom"
+                ? sharedCustomPool
+                : mode === "both"
+                    ? Array.from(new Set([...defaultPool, ...sharedCustomPool]))
+                    : defaultPool;
+
+        const fallbackViewUrl = fallbackPool.length > 0 ? pickRandom(fallbackPool) : undefined;
+        if (!fallbackViewUrl) {
+            return baseContent;
+        }
+
+        return `${baseContent}\nGIF: ${fallbackViewUrl}`;
+    };
+
+    const fallbackContent = buildFallbackContent();
 
     if (!mediaGifUrl) {
-        await textChannel.send({ content });
+        await textChannel.send({ content: fallbackContent });
         return;
     }
 
@@ -433,7 +468,7 @@ async function sendMemeNotification(
         });
 
         if (!gifResponse.ok) {
-            await textChannel.send({ content });
+            await textChannel.send({ content: fallbackContent });
             return;
         }
 
@@ -444,11 +479,11 @@ async function sendMemeNotification(
         });
 
         await textChannel.send({
-            content,
+            content: baseContent,
             files: [attachment]
         });
     } catch {
-        await textChannel.send({ content });
+        await textChannel.send({ content: fallbackContent });
     }
 }
 
@@ -964,7 +999,8 @@ export async function sendActiveDropReminders(
                 snapshotUpcomingDrops,
                 mentionText,
                 includeBlahLine
-            )
+            ),
+            { requireGif: true }
         );
         logPerfSegment("reminders.total", totalStartMs);
         return;
