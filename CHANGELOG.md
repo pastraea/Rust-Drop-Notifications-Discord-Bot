@@ -8,6 +8,22 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.1.3] - 2026-03-12
+
+### Added
+
+- `/alerts` now supports targeting either users or roles via `for:<@user|@role>`, while defaulting to the requesting user when omitted.
+- Role-based alert preferences are now persisted and included in timed alerts, live drop alerts, and `/checkdrops` mention resolution.
+
+### Changed
+
+- Alert notification dedupe now uses a unified alert-target model so user and role mentions are tracked consistently across reminder types.
+- `/alerts` help/confirmation messaging now reflects the updated `type` + `for` command syntax.
+
+### Fixed
+
+- CI workflow YAML formatting was corrected so the workflow parses cleanly without compact-mapping syntax errors.
+
 ## [0.1.2] - 2026-03-12
 
 ### Fixed
