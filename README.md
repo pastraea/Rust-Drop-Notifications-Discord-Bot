@@ -1,4 +1,4 @@
-# Rust Drops Reminder Bot
+# Rust Drops Notifications Bot
 
 Discord bot that tracks Rust drops from Twitch and Kick providers, persists state in SQLite, and posts reminder snapshots to Discord.
 
