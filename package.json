@@ -17,10 +17,10 @@
     "dependencies": {
         "better-sqlite3": "^12.8.0",
         "discord.js": "^14.18.0",
-        "dotenv": "^17.3.1",
+        "dotenv": "^17.4.2",
         "ffmpeg-static": "^5.3.0",
         "gifwrap": "^0.10.1",
-        "undici": "7.24.4",
+        "undici": "8.5.0",
         "zod": "^4.3.6"
     },
     "overrides": {
@@ -30,7 +30,7 @@
         "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^25.5.0",
         "c8": "^11.0.0",
-        "tsx": "^4.19.3",
+        "tsx": "^4.22.4",
         "typescript": "^6.0.3"
     }
 }
