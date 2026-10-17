@@ -2,7 +2,7 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
     [xml]$markup = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Install Rust Drops Bot" Width="720" Height="760" MinWidth="650" MinHeight="620"
+        Title="Install Rust Drop Notifications Discord Bot" Width="720" Height="760" MinWidth="650" MinHeight="620"
         WindowStartupLocation="CenterOwner" Background="#F5F6F8">
   <Grid Margin="24">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

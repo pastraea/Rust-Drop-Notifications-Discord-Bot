@@ -265,8 +265,8 @@ function Register-InstallStartup([string]$Launcher) {
 
 function Get-InstallShortcutPaths($Options) {
     $paths = @()
-    if ($Options.DesktopShortcut) { $paths += Join-Path ([Environment]::GetFolderPath('Desktop')) 'Rust Drops Bot.lnk' }
-    if ($Options.StartMenuShortcut) { $paths += Join-Path ([Environment]::GetFolderPath('Programs')) 'Rust Drops Bot.lnk' }
+    if ($Options.DesktopShortcut) { $paths += Join-Path ([Environment]::GetFolderPath('Desktop')) 'Rust Drop Notifications Discord Bot.lnk' }
+    if ($Options.StartMenuShortcut) { $paths += Join-Path ([Environment]::GetFolderPath('Programs')) 'Rust Drop Notifications Discord Bot.lnk' }
     return $paths
 }
 
@@ -282,7 +282,7 @@ function New-InstallShortcuts([string]$Destination, [string]$Launcher, [string[]
                 $link.TargetPath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
                 $link.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$Launcher`""
                 $link.WorkingDirectory = $Destination
-                $link.Description = 'Start Rust Drops Bot'
+                $link.Description = 'Start Rust Drop Notifications Discord Bot'
                 $link.Save()
             } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($link) }
         }

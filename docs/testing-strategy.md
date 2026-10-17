@@ -31,6 +31,9 @@ Covered areas:
 - Desktop button order and opt-in environment copies: editable in-memory text,
   original-file preservation, no automatic credential files, installation selection,
   missing/changed-target handling, and no secret contents in scan reports
+- Collapsed-by-default More section containing all diagnostics/advanced controls,
+  compact layout sizing, expansion/collapse resizing, and scan-result preservation
+  without automatically expanding diagnostics on completion or cancellation
 - Install/reinstall screen controls, masked credentials, independent settings and cancel.
 - Staged installation before cleanup, database/config reuse, private recovery ACLs,
   changed-scan rejection, fresh-install isolation from bundled secrets, command-output

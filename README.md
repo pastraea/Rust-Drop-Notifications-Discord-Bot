@@ -1,4 +1,4 @@
-# Rust Drops Notifications Bot
+# Rust Drop Notifications Discord Bot
 
 Discord bot that tracks Rust drops from Twitch and Kick providers, persists state in SQLite, and posts reminder snapshots to Discord.
 
@@ -101,9 +101,12 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\installer\Start-I
 ```
 
 The window has three main buttons, left to right: **Check installation**,
-**Uninstall / Reinstall**, and **Install**. Choose **Install** for setup options.
-**Uninstall / Reinstall** asks whether to reinstall or uninstall only.
-Use **Check installation** and select a discovered folder for uninstall-only.
+**Uninstall**, and **Install / Reinstall**. Choose **Install / Reinstall** for setup
+options. **Uninstall** opens removal options for the selected installation directly.
+Use **Check installation** and select a discovered folder under **More** for uninstall-only.
+**More** is collapsed by default: only the heading, subtitle, three main buttons,
+and **More** toggle are shown. Expand it to see scan status, discovered installations,
+diagnostic reports, and advanced controls. Scans do not automatically expand it.
 Checking is read-only and runs in the background. Credentials are never included in
 the scan report.
 While scanning, the check button becomes **Cancel scan**.
@@ -113,11 +116,11 @@ machine and loaded-user Run/RunOnce registry entries, profile Startup folders an
 shortcuts, running processes, and common installation folders. It also checks the
 original `%ProgramData%\RustDropsBot\start-rust-bot.ps1` launcher, even without its task.
 The common-folder scan searches four levels under profile, AppData, ProgramData,
-and Program Files locations. **More options** provides a deep scan of all local fixed
+and Program Files locations. **More** provides a deep scan of all local fixed
 drives and a specific-folder check.
 
 The unchecked **Open a found .env as an unsaved text copy** option under
-**More options** opens the selected discovered installation's `.env` in a separate
+**More** opens the selected discovered installation's `.env` in a separate
 editable text window after scanning. You can also enable it after a scan or select
 another discovered installation. Copies stay in memory: no temporary file is
 created, and editing does not change the original. Copy any text you want to keep
@@ -130,7 +133,7 @@ links or search dependency folders, filesystem metadata, network drives, contain
 or unloaded users' registry hives. A clean result is not proof that every possible
 custom installation was found.
 
-**Uninstall / Reinstall** requires a confirmation and removes only the recognized startup task,
+**Uninstall** requires a confirmation and removes only the recognized startup task,
 its matched process tree, launcher, and known launcher logs. Credentials and the
 configured SQLite database (including WAL/SHM sidecars) are kept unless you select
 their deletion. Other detected services/startup entries require manual cleanup before

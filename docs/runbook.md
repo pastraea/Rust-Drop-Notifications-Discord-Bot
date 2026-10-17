@@ -80,10 +80,12 @@ Actions:
 
 Launch `npm run installer` on the host, elevated if task permissions require it.
 Run **Check installation**, select a detected folder, and inspect the report
-before selecting **Uninstall / Reinstall**, then choose uninstall-only.
+before selecting **Uninstall** to review removal options.
 The scan includes scheduled tasks, services/NSSM, machine and loaded-user startup
 registry entries, profile Startup folders, processes, and common folders.
-**More options** offers a deep fixed-drive scan or a specific-folder check.
+**More** contains scan status, discovered installations, diagnostic reports, and
+advanced controls, including a deep fixed-drive scan or a specific-folder check.
+It is collapsed by default and remains collapsed during scans; expand it to review results.
 Access errors are shown and incomplete startup coverage blocks automatic removal.
 
 Automatic startup removal supports the `RustDropsBot` scheduled task
@@ -107,7 +109,7 @@ not restart automatically until explicitly re-enabled or reconfigured.
 ## Windows Install / Reinstall
 
 Run the setup window as administrator using the intended bot account. Select
-**Install**, or choose reinstall under **Uninstall / Reinstall**. Fill in the
+**Install / Reinstall**. Fill in the
 destination and masked credentials, or opt into reusing a scanned configuration.
 Select startup, start-now, registration, and shortcut settings independently.
 **Cancel** dismisses the options without changes. **Install** rescans and requests

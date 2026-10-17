@@ -8,6 +8,27 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.2.1] - 2026-10-18
+
+### Changed
+
+- Renamed installer headings, window titles, and newly created shortcuts to Rust Drop Notifications Discord Bot, retaining compatibility with existing startup identifiers and older shortcuts.
+- Corrected the main actions to Check installation, Uninstall, and Install / Reinstall; Uninstall now opens removal options directly without a reinstall-choice prompt.
+- Renamed the Windows setup window's "More options" section to "More".
+- Moved scan status, the installation selector, and diagnostic reports inside the collapsed-by-default More section alongside advanced controls.
+- The setup window now fits its visible content, showing only the heading, subtitle, three main actions, and More toggle when collapsed.
+
+### Added
+
+- Regression checks for the exact product name, button labels, direct uninstall routing, shortcut names/descriptions, and actual WPF visibility and expansion/collapse sizing.
+- Checks that scan completion and cancellation leave More collapsed and that expanding it preserves scan results and installation selection.
+
+### Upgrade Notes
+
+- Existing startup task, launcher, installation-folder, and database identifiers are unchanged. Older installer-owned shortcuts remain supported by uninstallation; newly created shortcuts use the full product name.
+- No bot runtime, Discord command, dependency, or database-schema changes are included in this patch.
+- Expand More to review scan results, select an installation for uninstalling, or access diagnostic and advanced controls. Installation/removal confirmations remain separate from the hidden diagnostics.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

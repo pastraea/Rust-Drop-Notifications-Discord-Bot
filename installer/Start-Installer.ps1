@@ -16,34 +16,35 @@ $script:openedEnvironmentCopies = @{}
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Rust Drops Bot Setup" Width="740" Height="520" MinWidth="700" MinHeight="480"
+        Title="Rust Drop Notifications Discord Bot Setup" Width="740" SizeToContent="Height" MinWidth="700"
         WindowStartupLocation="CenterScreen" Background="#F5F6F8">
   <Grid Margin="28">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
     <StackPanel>
-      <TextBlock FontSize="26" FontWeight="SemiBold">Rust Drops Bot</TextBlock>
-      <TextBlock Margin="0,6,0,22" Foreground="#555555">Check, install, or remove Rust Drops Bot.</TextBlock>
+      <TextBlock x:Name="ProductName" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap">Rust Drop Notifications Discord Bot</TextBlock>
+      <TextBlock Margin="0,6,0,22" Foreground="#555555" TextWrapping="Wrap">Check, install, or remove Rust Drop Notifications Discord Bot.</TextBlock>
     </StackPanel>
     <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,18">
       <Button x:Name="Check" Padding="8,14" Margin="0,0,8,0">Check installation</Button>
-      <Button x:Name="Uninstall" Padding="8,14" Margin="0,0,8,0" ToolTip="Choose uninstall only or open the reinstall screen.">Uninstall / Reinstall</Button>
-      <Button x:Name="Install" Padding="8,14" ToolTip="Choose an installation folder and settings.">Install</Button>
+      <Button x:Name="Uninstall" Padding="8,14" Margin="0,0,8,0" ToolTip="Review removal options for the selected installation.">Uninstall</Button>
+      <Button x:Name="Install" Padding="8,14" ToolTip="Choose an installation folder and settings.">Install / Reinstall</Button>
     </UniformGrid>
-    <TextBlock x:Name="Status" Grid.Row="2" Margin="0,0,0,10" TextWrapping="Wrap">Ready. Check installation to search this computer.</TextBlock>
-    <ComboBox x:Name="Installations" Grid.Row="3" Margin="0,0,0,12" Visibility="Collapsed"/>
-    <TextBox x:Name="Report" Grid.Row="4" IsReadOnly="True" TextWrapping="Wrap" BorderBrush="#DDDDDD"
-             Padding="10" VerticalScrollBarVisibility="Auto"
-             Text="Checking does not change your computer. Installation options are reviewed before any changes."/>
-    <Expander Grid.Row="5" Header="More options" Margin="0,16,0,0">
+    <Expander x:Name="More" Grid.Row="2" Header="More" IsExpanded="False">
+      <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="0,10,0,0">
+        <TextBlock x:Name="Status" Margin="0,0,0,10" TextWrapping="Wrap">Ready. Check installation to search this computer.</TextBlock>
+        <ComboBox x:Name="Installations" Margin="0,0,0,12" Visibility="Collapsed"/>
+        <TextBox x:Name="Report" Height="180" Margin="0,0,0,12" IsReadOnly="True" TextWrapping="Wrap" BorderBrush="#DDDDDD"
+                 Padding="10" VerticalScrollBarVisibility="Auto"
+                 Text="Checking does not change your computer. Installation options are reviewed before any changes."/>
         <CheckBox x:Name="DeepScan" Margin="0,0,0,8">Deep scan all local fixed drives (may take a long time)</CheckBox>
         <CheckBox x:Name="OpenEnvironment" Margin="0,0,0,8" IsChecked="False"
                   ToolTip="Opens the selected installation's .env as an editable, unsaved copy. It may contain secret tokens. The original is not changed.">Open a found .env as an unsaved text copy (contains secrets)</CheckBox>
         <Button x:Name="Browse" HorizontalAlignment="Left" Padding="10,5">Check a specific folder...</Button>
       </StackPanel>
+      </ScrollViewer>
     </Expander>
   </Grid>
 </Window>
@@ -52,7 +53,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 $reader.Close()
 $controls = @{}
-foreach ($name in @('Check', 'Install', 'Uninstall', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse')) {
+foreach ($name in @('Check', 'Install', 'Uninstall', 'More', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse')) {
     $controls[$name] = $window.FindName($name)
 }
 
@@ -161,9 +162,9 @@ function Show-Discovery($Scan) {
         else { $lines += '  Possible bot reference; target could not be confirmed. Manual inspection required.' }
     }
     if ($Scan.Folders.Count -eq 0 -and $Scan.Findings.Count -eq 0) {
-        $lines += 'No installation found in the locations checked. Use More options for a deep scan or a specific folder.'
+        $lines += 'No installation found in the locations checked. Use More for a deep scan or a specific folder.'
     }
-    $lines += @('', 'Select an installation above, then choose Uninstall / Reinstall to review removal options.',
+    $lines += @('', 'Select an installation above, then choose Uninstall to review removal options.',
         'Automatic removal currently supports the original scheduled-task setup and inactive folders. Other startup mechanisms are reported for manual cleanup.',
         '', "Scan coverage: $($Scan.Scope)",
         'Common folder search: up to four subfolder levels. Deep scan searches local fixed drives without a depth limit. Links and dependency/system metadata folders are not traversed.')
@@ -322,21 +323,13 @@ $controls.Browse.Add_Click({
             $issues = New-Object 'Collections.Generic.List[string]'
             $confirmed = @(Find-BotFolders -Roots @($Folder) -MaxDepth 0 -Issues $issues)
             if ($issues.Count -gt 0) { throw ($issues -join "`r`n") }
-            if ($confirmed.Count -eq 0) { throw 'The selected folder is not a confirmed Rust Drops Bot installation.' }
+            if ($confirmed.Count -eq 0) { throw 'The selected folder is not a confirmed Rust Drop Notifications Discord Bot installation.' }
             $scan.Folders = $confirmed
             $scan
         } @((Join-Path $PSScriptRoot 'WindowsDiscovery.psm1'), $folder) 'scan'
     } finally { $dialog.Dispose() }
 })
 $controls.Uninstall.Add_Click({
-    $choice = [Windows.MessageBox]::Show($window,
-        'Choose Yes to reinstall with a new folder and settings. Choose No to uninstall only. Cancel makes no changes.',
-        'Uninstall / Reinstall', 'YesNoCancel', 'Question', 'Cancel')
-    if ($choice -eq 'Cancel') { return }
-    if ($choice -eq 'Yes') {
-        $controls.Install.RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Button]::ClickEvent)))
-        return
-    }
     if ($null -eq $controls.Installations.SelectedItem) {
         $controls.Status.Text = 'Run Check installation and select an installation before uninstalling.'
         return

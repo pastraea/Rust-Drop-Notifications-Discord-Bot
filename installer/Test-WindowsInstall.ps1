@@ -99,6 +99,12 @@ try {
     New-Item -ItemType Directory -Path $privateFolder | Out-Null
     & $module { param($Folder) Set-PrivateInstallDirectory $Folder } $privateFolder
     Assert-InstallTest (Get-Acl -LiteralPath $privateFolder).AreAccessRulesProtected 'Recovery directory ACLs must not inherit access from shared folders.'
+    $shortcutOptions = New-TestOptions (Join-Path $temporary 'shortcut-name-test')
+    $shortcutOptions.DesktopShortcut = $true
+    $shortcutOptions.StartMenuShortcut = $true
+    $namedShortcuts = @(& $module { param($Options) Get-InstallShortcutPaths $Options } $shortcutOptions)
+    Assert-InstallTest ($namedShortcuts.Count -eq 2 -and
+        @($namedShortcuts | Where-Object { (Split-Path $_ -Leaf) -ne 'Rust Drop Notifications Discord Bot.lnk' }).Count -eq 0) 'Desktop and Start menu shortcuts must use the requested product name.'
     & $module {
         $script:fixtureScan = [pscustomobject]@{ Folders = @(); Findings = @(); Issues = @(); StartupIncomplete = $false }
         $script:events = @()
@@ -308,6 +314,7 @@ try {
             Assert-InstallTest ($shortcut.WorkingDirectory -eq (Join-Path $temporary 'launcher-target')) 'Shortcut working directory is wrong.'
             Assert-InstallTest ($shortcut.Arguments.Contains($launcher)) 'Shortcut does not launch the installed bot.'
             Assert-InstallTest ($shortcut.TargetPath -like '*\powershell.exe') 'Shortcut does not use Windows PowerShell.'
+            Assert-InstallTest ($shortcut.Description -eq 'Start Rust Drop Notifications Discord Bot') 'Shortcut description must use the requested product name.'
         } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) }
     } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
     Assert-InstallFailure {

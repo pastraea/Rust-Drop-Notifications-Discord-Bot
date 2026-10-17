@@ -306,13 +306,45 @@ try {
     $reader = New-Object System.Xml.XmlNodeReader $xml
     $window = [Windows.Markup.XamlReader]::Load($reader)
     try {
-        foreach ($name in @('Browse', 'Check', 'Install', 'Report', 'Status', 'Installations', 'DeepScan', 'OpenEnvironment', 'Uninstall')) {
+        foreach ($name in @('Browse', 'Check', 'Install', 'More', 'Report', 'Status', 'Installations', 'DeepScan', 'OpenEnvironment', 'Uninstall')) {
             Assert-True ($null -ne $window.FindName($name)) "Missing WPF control: $name"
         }
+        $more = $window.FindName('More')
+        Assert-True ($more.Header -eq 'More' -and -not $more.IsExpanded) 'More must be named correctly and collapsed by default.'
+        foreach ($name in @('Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse')) {
+            $ancestor = $window.FindName($name)
+            while ($null -ne $ancestor -and $ancestor -ne $more) {
+                $ancestor = [Windows.LogicalTreeHelper]::GetParent($ancestor)
+            }
+            Assert-True ($ancestor -eq $more) "Diagnostic/advanced control must be inside More: $name"
+        }
+        Assert-True ($window.SizeToContent -eq 'Height') 'Window must shrink when More is collapsed.'
+        $window.ShowActivated = $false
+        $window.ShowInTaskbar = $false
+        $window.Show()
+        $window.UpdateLayout()
+        $layout = $window.Content
+        $available = New-Object Windows.Size 684, ([double]::PositiveInfinity)
+        $layout.Measure($available)
+        $collapsedHeight = $layout.DesiredSize.Height
+        Assert-True ($collapsedHeight -lt 230) 'Collapsed layout must not reserve diagnostic space.'
+        Assert-True (-not $window.FindName('Status').IsVisible -and -not $window.FindName('Report').IsVisible) 'Collapsed More must hide diagnostics.'
+        $more.IsExpanded = $true
+        $window.UpdateLayout()
+        $layout.Measure($available)
+        Assert-True ($layout.DesiredSize.Height -gt $collapsedHeight + 180) 'Expanding More must reveal the diagnostic section.'
+        Assert-True ($window.FindName('Status').IsVisible -and $window.FindName('Report').IsVisible) 'Expanded More must show diagnostics.'
+        $more.IsExpanded = $false
+        $window.UpdateLayout()
+        $layout.Measure($available)
+        Assert-True ([Math]::Abs($layout.DesiredSize.Height - $collapsedHeight) -lt 1) 'Collapsing More must restore the compact layout.'
         Assert-True $window.FindName('Install').IsEnabled 'Install must open setup options.'
+        Assert-True ($window.Title -eq 'Rust Drop Notifications Discord Bot Setup' -and
+            $window.FindName('ProductName').Text -eq 'Rust Drop Notifications Discord Bot') 'Installer must use the requested product name.'
         Assert-True (-not $window.FindName('OpenEnvironment').IsChecked) 'Credential copies must be opt-in.'
         $buttons = @($window.FindName('Check').Parent.Children)
         Assert-True (($buttons.Name -join ',') -eq 'Check,Uninstall,Install') 'Incorrect main button order.'
+        Assert-True (($buttons.Content -join '|') -eq 'Check installation|Uninstall|Install / Reinstall') 'Incorrect main button labels.'
         Assert-True ($xml.OuterXml -notmatch '(?i)github|git checkout') 'Setup UI must not contain development-hosting terminology.'
     } finally {
         $window.Close()
@@ -333,6 +365,8 @@ try {
             Assert-True ($null -eq $script:worker) 'Desktop background operation did not finish.'
         }
         try {
+            $controls.Uninstall.RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Button]::ClickEvent)))
+            Assert-True ($controls.Status.Text -match 'select an installation before uninstalling') 'Uninstall must go directly to removal prerequisites without opening reinstall options.'
             Start-BackgroundOperation {
                 [pscustomobject]@{
                     Folders = @('C:\test-only-fixture'); Findings = @(); Issues = @()
@@ -342,12 +376,19 @@ try {
             Assert-True ($controls.Check.Content -eq 'Cancel scan') 'Active scan must offer cancellation.'
             Wait-UiOperation
             Assert-True ($controls.Installations.Items.Count -eq 1) 'Background scan results did not populate the UI.'
+            Assert-True (-not $controls.More.IsExpanded) 'Scan completion must not expose diagnostics automatically.'
+            $savedReport = $controls.Report.Text
+            $controls.More.IsExpanded = $true
+            Assert-True ($controls.Installations.SelectedItem -eq 'C:\test-only-fixture' -and
+                $controls.Report.Text -eq $savedReport) 'Expanding More must preserve scan results and selection.'
+            $controls.More.IsExpanded = $false
             Assert-True $controls.Uninstall.IsEnabled 'Confirmed scan result did not enable removal review.'
             Assert-True $controls.Install.IsEnabled 'Completed background scan did not enable setup.'
             Start-BackgroundOperation { Start-Sleep -Seconds 30 } @() 'scan'
             $controls.Check.RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Button]::ClickEvent)))
             Wait-UiOperation
             Assert-True ($controls.Report.Text -match 'No files or startup settings were changed') 'Scan cancellation was not reported safely.'
+            Assert-True (-not $controls.More.IsExpanded) 'Scan cancellation must preserve the collapsed More state.'
 
             $copyFolder = Join-Path $FixtureRoot 'credential-copy-fixture'
             New-Item -ItemType Directory -Path $copyFolder | Out-Null
@@ -403,6 +444,7 @@ try {
             $controls.OpenEnvironment.IsChecked = $false
             $setup = New-InstallScreen $window @($copyFolder, $secondFolder)
             try {
+                Assert-True ($setup.Title -eq 'Install Rust Drop Notifications Discord Bot') 'Install screen must use the requested product name.'
                 foreach ($name in @('Destination', 'BrowseDestination', 'Token', 'ClientId', 'GuildId', 'ReuseFolder',
                     'ReuseConfiguration', 'ReuseDatabase', 'RunOnLogon', 'StartNow', 'RegisterCommands',
                     'DesktopShortcut', 'StartMenuShortcut', 'AllowNodeInstall', 'Cancel', 'ConfirmInstall')) {

@@ -301,7 +301,9 @@ function Remove-BotOwnedShortcuts([string]$Repository) {
     if (-not $metadata.PSObject.Properties['Shortcuts']) { return }
     $allowed = @(
         (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Rust Drops Bot.lnk'),
-        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rust Drops Bot.lnk')
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rust Drops Bot.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Rust Drop Notifications Discord Bot.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rust Drop Notifications Discord Bot.lnk')
     )
     foreach ($path in @($metadata.Shortcuts)) {
         if ($allowed -notcontains $path) { throw "Unrecognized shortcut path in installation metadata." }
