@@ -86,6 +86,123 @@ Setup:
 
 ## Deployment
 
+### Windows setup window
+
+On Windows, open the desktop setup window from a repository checkout:
+
+```powershell
+npm run installer
+```
+
+Node.js is not required to launch the window directly:
+
+```powershell
+powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\installer\Start-Installer.ps1
+```
+
+The window has three main buttons, left to right: **Check installation**,
+**Uninstall / Reinstall**, and **Install**. Choose **Install** for setup options.
+**Uninstall / Reinstall** asks whether to reinstall or uninstall only.
+Use **Check installation** and select a discovered folder for uninstall-only.
+Checking is read-only and runs in the background. Credentials are never included in
+the scan report.
+While scanning, the check button becomes **Cancel scan**.
+
+Detection checks scheduled tasks, Windows services (including NSSM launcher settings),
+machine and loaded-user Run/RunOnce registry entries, profile Startup folders and
+shortcuts, running processes, and common installation folders. It also checks the
+original `%ProgramData%\RustDropsBot\start-rust-bot.ps1` launcher, even without its task.
+The common-folder scan searches four levels under profile, AppData, ProgramData,
+and Program Files locations. **More options** provides a deep scan of all local fixed
+drives and a specific-folder check.
+
+The unchecked **Open a found .env as an unsaved text copy** option under
+**More options** opens the selected discovered installation's `.env` in a separate
+editable text window after scanning. You can also enable it after a scan or select
+another discovered installation. Copies stay in memory: no temporary file is
+created, and editing does not change the original. Copy any text you want to keep
+before closing the window; closing discards it. These windows contain secret
+credentials, so do not share screenshots or paste their contents into chat.
+Missing or unreadable files are reported; linked credential paths are refused.
+
+Access errors and skipped links/junctions are reported. Deep scans do not follow
+links or search dependency folders, filesystem metadata, network drives, containers,
+or unloaded users' registry hives. A clean result is not proof that every possible
+custom installation was found.
+
+**Uninstall / Reinstall** requires a confirmation and removes only the recognized startup task,
+its matched process tree, launcher, and known launcher logs. Credentials and the
+configured SQLite database (including WAL/SHM sidecars) are kept unless you select
+their deletion. Other detected services/startup entries require manual cleanup before
+removal; incomplete startup checks block removal. Close manually launched bot terminals first: relative-path processes
+outside the recognized launcher's tree cannot be safely attributed.
+
+The optional old-folder deletion requires data-deletion consent too. It refuses the
+running installer's folder, development checkouts, protected paths, junctions/symbolic
+links, and folders with unrecognized top-level contents. Back up local changes first:
+recognized old-folder contents are permanently deleted when confirmed. External or
+nonstandard database paths require manual resolution rather than automatic deletion.
+
+Run the window from an elevated PowerShell if task cleanup requires administrator
+permissions. Failures are displayed explicitly; some cleanup may already have
+completed, so check again before retrying. Shared Node.js/npm, Discord-side settings,
+Windows services, PM2, Docker, and unsupported installations are not automatically
+removed. Linux support and packaged downloads are not implemented yet.
+
+#### Install or reinstall
+
+Run setup **as administrator**, using the same Windows account that should run the
+bot. A different administrator account would own the resulting startup task and shortcuts.
+The installer copies its bundled bot files, not a download from source control.
+It requires internet access for `npm ci` and, if selected, Discord command registration.
+Node.js 22.12+ and npm are required. The optional Node.js checkbox uses Windows App
+Installer (`winget`) to download the exact `OpenJS.NodeJS.LTS` package if needed;
+Windows may request consent. If winget is absent, install Node.js LTS manually.
+
+The setup screen includes:
+
+- Editable destination (default `%LOCALAPPDATA%\RustDropsBot`) and folder picker.
+- Masked bot token, application ID, and Discord server ID.
+- Optional reuse of a scanned installation's configuration and/or SQLite database.
+  Blank credential fields keep reused values; entered fields override them.
+- Separate checkboxes for current-user sign-in startup, starting immediately,
+  registering slash commands, and desktop/Start menu start shortcuts.
+- Separate **Cancel** and **Install** buttons.
+
+Opening or cancelling this screen does not install or uninstall anything. After
+**Install**, a fresh scan runs (including earlier discovered folders), then a final
+confirmation lists the old installations to remove. Unsupported startup entries,
+incomplete startup scans, occupied destinations/shortcuts, and protected old folders
+block installation. The setup's own folder is preserved. Deep scanning remains opt-in;
+only discovered installations can be addressed.
+
+After confirmation, setup validates Node.js, stages clean bundled files, installs
+dependencies, and builds the bot **before** removing old installations. If selected,
+command registration also runs before old cleanup; it updates the selected Discord
+server and cannot be undone by cancelling a later failure. Supported old startup
+setups are stopped, old data is backed up, and their confirmed old folders are removed.
+The new configuration uses `data\bot.db`; selected database preferences are retained.
+The running setup copy can supply a database through SQLite's online backup API.
+
+The private staging/recovery folder is shown in the result under
+`%LOCALAPPDATA%\RustDropsBot-Setup\<unique-id>`. It may contain secret credentials.
+Recovery copies are intentionally retained: verify the new bot, then remove these
+specific folders manually when no longer needed. Errors explicitly report possible
+partial changes and the recovery location; automatic rollback is not promised.
+
+The installed launcher remains at `%ProgramData%\RustDropsBot\start-rust-bot.ps1`,
+with private output/error logs alongside it. Optional `RustDropsBot` startup runs
+at **this user's sign-in**, with limited privileges, no saved password, no execution
+time limit, and duplicate-task prevention. Shortcuts start the bot (not setup);
+a per-session mutex prevents duplicate starts. Starting successfully only verifies
+that the process/task stays running briefly, not that Discord connectivity is healthy.
+Check the bot's online state and use `/setchannel` and `/checkdrops` afterward.
+
+Run the isolated safety tests with `npm run test:installer`. They mock OS task and
+process operations and use temporary fixture folders; they do not uninstall a real bot,
+download Node.js, or contact Discord. When local dependencies are available, a real
+SQLite WAL backup is also tested on temporary data.
+
 ### Environment Variables
 
 | Variable | Required | Purpose |

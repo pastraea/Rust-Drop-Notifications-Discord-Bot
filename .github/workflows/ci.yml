@@ -7,6 +7,15 @@ on:
   pull_request:
 
 jobs:
+  windows-uninstall:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Test Windows uninstall safeguards and desktop layout
+        shell: powershell
+        run: .\installer\Test-WindowsUninstall.ps1
+
   build-and-test:
     runs-on: ubuntu-latest
 

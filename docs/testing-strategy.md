@@ -22,6 +22,21 @@ Covered areas:
 - manual checks for upcoming campaigns beyond 24 hours, including general-only campaigns
 - live announcements with correct channels and dedupe preserved
 - failed provider syncs retaining stored campaign participation
+- Windows uninstall detection, process-tree isolation, confirmation preconditions,
+  data preservation/deletion, protected folders, and WPF layout loading in
+  `installer/Test-WindowsUninstall.ps1`; scheduled-task and process calls are mocked
+- Windows discovery adapters for tasks, services/NSSM, registry startup entries,
+  Startup scripts and processes; identity checks on renamed/unrelated folders,
+  bounded common scans, deep scans, and incomplete-scan removal blocking
+- Desktop button order and opt-in environment copies: editable in-memory text,
+  original-file preservation, no automatic credential files, installation selection,
+  missing/changed-target handling, and no secret contents in scan reports
+- Install/reinstall screen controls, masked credentials, independent settings and cancel.
+- Staged installation before cleanup, database/config reuse, private recovery ACLs,
+  changed-scan rejection, fresh-install isolation from bundled secrets, command-output
+  redaction, opt-in Node.js provisioning, and limited current-user logon task settings.
+  `installer/Test-WindowsInstall.ps1` is invoked by the main installer test script.
+  A temporary live-WAL SQLite backup is tested when Node.js/dependencies are present.
 
 ## Gaps and Next Targets
 
@@ -51,6 +66,7 @@ Covered areas:
 
 - `npm test`
 - `npm run test:coverage`
+- `npm run test:installer` (Windows only; also runs in the separate Windows CI job)
 
 ## Quality Bar
 

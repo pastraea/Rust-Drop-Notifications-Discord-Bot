@@ -75,3 +75,53 @@ Actions:
 - Snapshot the SQLite file during low activity windows.
 - Keep versioned backups and retention policy external to the app.
 - Validate restore procedure periodically.
+
+## Removing the Legacy Windows Startup Setup
+
+Launch `npm run installer` on the host, elevated if task permissions require it.
+Run **Check installation**, select a detected folder, and inspect the report
+before selecting **Uninstall / Reinstall**, then choose uninstall-only.
+The scan includes scheduled tasks, services/NSSM, machine and loaded-user startup
+registry entries, profile Startup folders, processes, and common folders.
+**More options** offers a deep fixed-drive scan or a specific-folder check.
+Access errors are shown and incomplete startup coverage blocks automatic removal.
+
+Automatic startup removal supports the `RustDropsBot` scheduled task
+that launches `%ProgramData%\RustDropsBot\start-rust-bot.ps1` at user logon.
+
+Data deletion and old-folder deletion are opt-in and permanent. Back up the
+configured database and credentials first. The running installation and development
+folders cannot be deleted by the tool. External database paths, unknown task
+actions, ambiguous relative-path processes, and unrecognized folder contents
+require manual resolution. The tool does not remove shared runtimes or undo
+Discord-side bot registrations, permissions, or previously sent messages.
+Detected services, registry startup entries, and other task configurations must be
+removed manually before this version can remove their associated installation.
+Deep scans are not exhaustive: links, dependency/system metadata folders,
+unloaded-user registry hives, containers, and remote drives are not inspected.
+
+If an uninstall fails, its error is shown and some prior steps may already have
+completed. Recheck before retrying; a task disabled during a failed removal will
+not restart automatically until explicitly re-enabled or reconfigured.
+
+## Windows Install / Reinstall
+
+Run the setup window as administrator using the intended bot account. Select
+**Install**, or choose reinstall under **Uninstall / Reinstall**. Fill in the
+destination and masked credentials, or opt into reusing a scanned configuration.
+Select startup, start-now, registration, and shortcut settings independently.
+**Cancel** dismisses the options without changes. **Install** rescans and requests
+explicit confirmation of the removal list before any installation changes.
+
+Staging/build and optional Discord command registration precede destructive
+cleanup. Registration changes the selected server even if a later step fails.
+Old credential/database recovery copies are retained under the private
+`%LOCALAPPDATA%\RustDropsBot-Setup` directory; error/success output identifies the
+specific location. Preserve it until recovery or verification is complete.
+Never upload its contents. Failed installs may be partial: inspect the reported
+destination, startup task, launcher, and recovery paths before retrying.
+
+Installed startup uses the original `RustDropsBot` launcher/task identity so the
+uninstaller can recognize it. It starts at the current user's logon, not boot.
+Shortcuts are ownership-recorded and removed only when their target still matches.
+Node.js/npm remain shared prerequisites and are not removed during uninstall.

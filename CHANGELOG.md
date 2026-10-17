@@ -8,6 +8,26 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.2.0] - 2026-10-18
+
+### Added
+
+- Windows desktop setup window with read-only detection and confirmed uninstallation of the legacy RustDropsBot scheduled-task setup.
+- Optional credential/database and old installation-folder removal with path protections, plus isolated uninstall safety tests.
+- Simplified three-button Windows setup screen, automatic startup/common-folder discovery, and optional deep fixed-drive scanning with access warnings.
+- Opt-in unsaved environment-file copies in a separate editable window, without modifying originals or creating temporary credential files.
+- Windows install/reinstall options screen with destination, masked credentials, configuration/database reuse, logon startup, command registration, desktop/Start menu shortcuts, and opt-in Node.js LTS provisioning.
+- Staged dependency installation/build before confirmed old-installation cleanup, private recovery data backups, and installer-owned shortcut cleanup.
+
+### Installation Notes
+
+- Launch the Windows 10/11 desktop setup with `npm run installer`. Installation requires administrator PowerShell under the intended bot user.
+- Startup runs at the current user's sign-in, not before sign-in at machine boot.
+- Node.js 22.12 or newer and npm are required for installation; downloading Node.js LTS through winget is opt-in.
+- Review the fresh scan and explicit removal confirmation before reinstalling. The setup/source folder and unrelated applications are protected; unsupported startup entries and incomplete startup discovery block automatic removal.
+- Old configuration and database backups are retained in a private recovery folder shown in the result. Verify the new installation before manually deleting these sensitive backups.
+- This is a repository-launched Windows setup interface, not a packaged standalone executable. Real-machine installation and live Discord connectivity still require manual validation.
+
 ## [0.1.4] - 2026-10-17
 
 ### Added
