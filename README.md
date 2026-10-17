@@ -8,6 +8,7 @@ Discord bot that tracks Rust drops from Twitch and Kick providers, persists stat
 - Discord slash commands for channel configuration, alert preferences, and GIF controls
 - SQLite persistence for user preferences, campaign state, and notification dedupe
 - Mock and live provider modes for local testing and production operation
+- Official Facepunch Twitch participation lists, with general and streamer-specific drops shown separately
 
 ## Architecture Overview
 
@@ -46,6 +47,16 @@ Examples:
 - `/alerts enable types:24h 1h checkdrops`
 - `/checkdrops mode:full`
 - `/gifs add url:https://tenor.com/view/example`
+
+`/checkdrops` shows active and upcoming campaigns with listed participation, including
+campaigns more than 24 hours away. General drops count as listed participation even
+without named streamers. Use `mode:full` to also include campaigns whose participation
+is not yet listed. Timed reminders retain their existing 24h/12h/1h windows.
+
+For Twitch, "listed" means the provider lists participation, not that the channel is
+currently live. General drops require a drops-enabled Rust stream; streamer drops
+require the specific listed channels. The bot does not guess participants from live
+Rust directory results or stream titles.
 
 ## Local Development
 
@@ -114,6 +125,14 @@ Common issues and fixes:
 4. Provider data appears empty.
    - Twitch/Kick upstream pages or APIs may be temporarily unavailable.
    - Retry later; the scheduler is designed to continue on provider failures.
+   - Twitch uses the official Facepunch campaign page for dates and participation.
+     Optional Twitch API credentials are used only as a fallback if Facepunch fails.
+   - Twitch timing uses the published Facepunch campaign date range, not the
+     countdown target (which is the start date for upcoming campaigns). Discord
+     timestamps display in each viewer's local timezone.
+   - If both Facepunch and its API fallback fail, Twitch fails the sync cycle rather than
+     inventing dates or marking stored campaigns as ended. A successful subsequent
+     sync replaces incorrectly timed Facepunch entries automatically.
 
 5. Database issues.
    - Confirm process can write to `DATABASE_PATH` directory.
@@ -128,7 +147,11 @@ Current commands:
 - `npm test` for unit tests
 - `npm run test:coverage` for coverage report output
 
-Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1).
+Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1)
+and Twitch campaign parsing in [src/providers/twitch.test.ts](src/providers/twitch.test.ts).
+The [drop flow tests](src/services/dropFlow.test.ts) exercise official campaign HTML
+through real SQLite persistence and a mocked Discord send, including schema migration,
+manual snapshots, live alert dedupe, and failed-sync preservation.
 
 Not yet covered in depth:
 

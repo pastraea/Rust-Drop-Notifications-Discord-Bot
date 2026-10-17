@@ -2,7 +2,7 @@ import type { DropsProvider } from "./base.js";
 import type { NormalizedDrop } from "../types.js";
 
 /**
- * Twitch drops provider with Helix-first fetch and Facepunch/public-web fallback discovery.
+ * Twitch drops provider using official Facepunch campaign details with a Helix fallback.
  */
 
 interface TwitchProviderOptions {
@@ -13,9 +13,6 @@ interface TwitchProviderOptions {
 
 const TWITCH_FACEPUNCH_URL = "https://twitch.facepunch.com/";
 const COUNTDOWN_REGEX = /setupCountdown\(\s*['\"]\.campaign-(\d+)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
-const TWITCH_PUBLIC_GQL_URL = "https://gql.twitch.tv/gql";
-const TWITCH_PUBLIC_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-const CHANNEL_CACHE_TTL_MS = 3 * 60 * 1000;
 
 interface TwitchAppTokenResponse {
     access_token: string;
@@ -53,19 +50,18 @@ interface TwitchDropsCampaignsResponse {
 }
 
 /**
- * Twitch provider that combines Helix API data with Facepunch/public fallback discovery.
+ * Twitch provider that reads participating channels from the official campaign page.
  */
 export class TwitchDropsProvider implements DropsProvider {
     readonly platform = "twitch" as const;
     private cachedToken?: { value: string; expiresAtMs: number };
     private hasWarnedMissingCreds = false;
-    private sourceStatus = "live fallback (Facepunch timing parser)";
-    private cachedPublicChannels?: { value: string[]; expiresAtMs: number };
+    private sourceStatus = "live (Facepunch campaign page)";
 
     /** Creates a Twitch provider with runtime flags and optional API credentials. */
     constructor(private readonly options: TwitchProviderOptions) { }
 
-    /** Fetches Rust campaigns via API first, then falls back to Facepunch/public discovery. */
+    /** Uses Facepunch as the authority; never infers participation from live stream titles. */
     async fetchRustDrops(): Promise<NormalizedDrop[]> {
         if (this.options.useMockData) {
             this.sourceStatus = "mock data";
@@ -73,32 +69,20 @@ export class TwitchDropsProvider implements DropsProvider {
         }
 
         try {
+            const html = await this.fetchCampaignPage();
+            const drops = this.parseCountdownDrops(html);
+            this.sourceStatus = "live (Facepunch campaign dates and participating channels)";
+            return drops;
+        } catch (error) {
+            console.warn("Facepunch campaign fetch failed; trying Twitch Helix:", error);
             const apiDrops = await this.fetchApiDrops();
             if (apiDrops.length > 0) {
-                this.sourceStatus = "live (Twitch Helix API)";
+                this.sourceStatus = "live fallback (Twitch Helix API)";
                 return apiDrops;
             }
-
-            const html = await this.fetchCampaignPage();
-            const countdownDrops = this.parseCountdownDrops(html, []);
-            if (countdownDrops.length === 0) {
-                this.sourceStatus = "live fallback (Facepunch timing parser)";
-                return countdownDrops;
-            }
-
-            const channels = await this.fetchRustChannelsFromPublicWeb();
-            this.sourceStatus = channels.length > 0
-                ? "live fallback (Facepunch timing + Twitch public web discovery)"
-                : "live fallback (Facepunch timing parser)";
-            if (channels.length === 0) {
-                return countdownDrops;
-            }
-
-            return countdownDrops.map((drop) => ({ ...drop, channels }));
-        } catch (error) {
             this.sourceStatus = "error (provider fetch failed)";
             console.error("Failed to fetch Twitch drops:", error);
-            return [];
+            throw error;
         }
     }
 
@@ -113,7 +97,7 @@ export class TwitchDropsProvider implements DropsProvider {
             if (!this.hasWarnedMissingCreds) {
                 this.hasWarnedMissingCreds = true;
                 console.warn(
-                    "TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET not set. Twitch provider is using Facepunch timing fallback only."
+                    "TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET not set. Twitch API fallback is unavailable."
                 );
             }
             return [];
@@ -134,7 +118,7 @@ export class TwitchDropsProvider implements DropsProvider {
             const drops = response.data.map((campaign) => this.toNormalizedDropFromApi(campaign));
             return drops.filter((drop) => drop.status !== "ended");
         } catch (error) {
-            console.warn("Twitch Helix drops fetch failed, falling back to Facepunch page:", error);
+            console.warn("Twitch Helix fallback failed:", error);
             return [];
         }
     }
@@ -251,8 +235,11 @@ export class TwitchDropsProvider implements DropsProvider {
     /** Converts a Helix campaign object into the normalized drop shape. */
     private toNormalizedDropFromApi(campaign: TwitchDropsCampaign): NormalizedDrop {
         const now = Date.now();
-        const startMs = campaign.starts_at ? Date.parse(campaign.starts_at) : now;
-        const endMs = campaign.ends_at ? Date.parse(campaign.ends_at) : now + 24 * 60 * 60 * 1000;
+        const startMs = Date.parse(campaign.starts_at ?? "");
+        const endMs = Date.parse(campaign.ends_at ?? "");
+        if (!this.isValidCampaignRange(startMs, endMs)) {
+            throw new Error(`Twitch campaign ${campaign.id} has missing or invalid campaign dates`);
+        }
         const status = this.normalizeStatus(now, startMs, endMs, campaign.status);
 
         return {
@@ -265,68 +252,6 @@ export class TwitchDropsProvider implements DropsProvider {
             endTime: new Date(endMs).toISOString(),
             status
         };
-    }
-
-    /** Discovers likely Rust channels from Twitch public directory GraphQL data. */
-    private async fetchRustChannelsFromPublicWeb(limit = 20): Promise<string[]> {
-        if (this.cachedPublicChannels && Date.now() < this.cachedPublicChannels.expiresAtMs) {
-            return this.cachedPublicChannels.value;
-        }
-
-        try {
-            const payload = {
-                query: `query RustDirectoryChannels($first: Int!) {\n  game(name: \"Rust\") {\n    streams(first: $first) {\n      edges {\n        node {\n          title\n          broadcaster {\n            login\n          }\n        }\n      }\n    }\n  }\n}`,
-                variables: { first: Math.max(5, Math.min(limit * 2, 50)) }
-            };
-
-            const response = await this.fetchWithRetries(TWITCH_PUBLIC_GQL_URL, {
-                method: "POST",
-                headers: {
-                    "Client-Id": TWITCH_PUBLIC_CLIENT_ID,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(8000)
-            });
-
-            if (!response.ok) {
-                return [];
-            }
-
-            const body = (await response.json()) as {
-                data?: {
-                    game?: {
-                        streams?: {
-                            edges?: Array<{
-                                node?: {
-                                    title?: string;
-                                    broadcaster?: { login?: string };
-                                };
-                            }>;
-                        };
-                    };
-                };
-            };
-
-            const all = (body.data?.game?.streams?.edges ?? [])
-                .map((edge) => ({
-                    login: edge.node?.broadcaster?.login?.trim(),
-                    title: edge.node?.title ?? ""
-                }))
-                .filter((entry): entry is { login: string; title: string } => Boolean(entry.login));
-
-            const preferred = all.filter((entry) => /\bdrops?\b/i.test(entry.title));
-            const ordered = preferred.length > 0 ? preferred : all;
-
-            const channels = Array.from(new Set(ordered.map((entry) => entry.login))).slice(0, limit);
-            this.cachedPublicChannels = {
-                value: channels,
-                expiresAtMs: Date.now() + CHANNEL_CACHE_TTL_MS
-            };
-            return channels;
-        } catch {
-            return [];
-        }
     }
 
     /** Performs retrying fetch requests for transient upstream/network failures. */
@@ -353,20 +278,71 @@ export class TwitchDropsProvider implements DropsProvider {
         throw lastError instanceof Error ? lastError : new Error("Request failed after retries");
     }
 
-    /** Parses Facepunch countdown script blocks into normalized drop campaigns. */
-    private parseCountdownDrops(html: string, channels: string[]): NormalizedDrop[] {
+    private isValidCampaignRange(startMs: number, endMs: number): boolean {
+        return Number.isFinite(startMs) && Number.isFinite(endMs)
+            && startMs > 0 && endMs > startMs
+            && !Number.isNaN(new Date(startMs).getTime())
+            && !Number.isNaN(new Date(endMs).getTime());
+    }
+
+    /** Reads published campaign dates; upcoming countdowns target the start, not the end. */
+    private parseCountdownDrops(html: string): NormalizedDrop[] {
         const drops: NormalizedDrop[] = [];
         const now = Date.now();
         const seen = new Set<string>();
+        const campaigns = Array.from(html.matchAll(
+            /<div\b[^>]*\bclass\s*=\s*["'][^"']*\bcampaign\b[^"']*\bcampaign-(\d+)\b[^"']*["'][^>]*>/gi
+        ));
+        const publishedRanges = new Map<number, { startMs: number; endMs: number; title?: string }>();
+        const campaignChannels = new Map<number, Set<string>>();
+        const generalCampaigns = new Set<number>();
 
-        for (const match of html.matchAll(COUNTDOWN_REGEX)) {
-            const campaignIndex = Number(match[1]);
-            const startMs = Number(match[2]);
-            const endMs = Number(match[3]);
-
-            if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+        for (const [index, campaign] of campaigns.entries()) {
+            const block = html.slice(campaign.index, campaigns[index + 1]?.index ?? html.length);
+            const campaignIndex = Number(campaign[1]);
+            const channels = campaignChannels.get(campaignIndex) ?? new Set<string>();
+            for (const anchor of block.matchAll(/<a\b[^>]*>/gi)) {
+                const classes = anchor[0].match(/\bclass\s*=\s*["']([^"']*)["']/i)?.[1].split(/\s+/) ?? [];
+                if (!classes.includes("streamer-info") && !classes.includes("drop-box-body")) {
+                    continue;
+                }
+                const href = anchor[0].match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+                const login = href?.match(/^https:\/\/(?:www\.)?twitch\.tv\/([a-z0-9_]{1,25})\/?(?:[?#].*)?$/i)?.[1];
+                if (login && !["directory", "drops", "videos", "settings", "inventory"].includes(login.toLowerCase())) {
+                    channels.add(login.toLowerCase());
+                }
+            }
+            campaignChannels.set(campaignIndex, channels);
+            if (/\bclass\s*=\s*["'][^"']*\bgeneral-drops-grid\b/i.test(block)) {
+                generalCampaigns.add(campaignIndex);
+            }
+            const dateIds = Array.from(block.matchAll(/<span\b[^>]*\bdata-date-id\s*=\s*["']([^"']+)["'][^>]*>/gi));
+            if (dateIds.length === 0) {
                 continue;
             }
+
+            const startMs = Number(dateIds[0]?.[1].match(/-(\d+)$/)?.[1]) * 1000;
+            const endMs = Number(dateIds[1]?.[1].match(/-(\d+)$/)?.[1]) * 1000;
+            if (!this.isValidCampaignRange(startMs, endMs)) {
+                throw new Error(`Facepunch campaign ${campaign[1]} has missing or invalid published dates`);
+            }
+
+            const title = block.match(/<h2\b[^>]*\bclass\s*=\s*["'][^"']*\bevent-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i)?.[1]
+                .replace(/<[^>]+>/g, "").replaceAll("&amp;", "&").trim();
+            publishedRanges.set(Number(campaign[1]), { startMs, endMs, title });
+        }
+
+        const countdowns = new Map<number, { startMs: number; endMs: number }>();
+        for (const match of html.matchAll(COUNTDOWN_REGEX)) {
+            countdowns.set(Number(match[1]), { startMs: Number(match[2]), endMs: Number(match[3]) });
+        }
+
+        for (const campaignIndex of new Set([...publishedRanges.keys(), ...countdowns.keys()])) {
+            const range = publishedRanges.get(campaignIndex) ?? countdowns.get(campaignIndex);
+            if (!range || !this.isValidCampaignRange(range.startMs, range.endMs)) {
+                throw new Error(`Facepunch campaign ${campaignIndex} has no valid campaign date range`);
+            }
+            const { startMs, endMs } = range;
 
             const externalId = `tw-facepunch-${campaignIndex}-${startMs}-${endMs}`;
             if (seen.has(externalId)) {
@@ -377,8 +353,9 @@ export class TwitchDropsProvider implements DropsProvider {
             drops.push({
                 platform: "twitch",
                 externalId,
-                title: `Rust Twitch Drops Campaign ${campaignIndex + 1}`,
-                channels,
+                title: publishedRanges.get(campaignIndex)?.title || `Rust Twitch Drops Campaign ${campaignIndex + 1}`,
+                channels: Array.from(campaignChannels.get(campaignIndex) ?? []),
+                hasGeneralDrops: generalCampaigns.has(campaignIndex),
                 game: "rust",
                 startTime: new Date(startMs).toISOString(),
                 endTime: new Date(endMs).toISOString(),
@@ -389,7 +366,7 @@ export class TwitchDropsProvider implements DropsProvider {
         return drops;
     }
 
-    /** Derives canonical drop status from explicit status text or start/end timestamps. */
+    /** Dates determine availability; explicit ended statuses also cover cancelled campaigns. */
     private normalizeStatus(
         nowMs: number,
         startMs: number,
@@ -397,14 +374,6 @@ export class TwitchDropsProvider implements DropsProvider {
         rawStatus?: string
     ): "upcoming" | "active" | "ended" {
         const normalized = (rawStatus ?? "").toLowerCase();
-        if (normalized.includes("active") || normalized.includes("live")) {
-            return "active";
-        }
-
-        if (normalized.includes("upcoming") || normalized.includes("scheduled")) {
-            return "upcoming";
-        }
-
         if (normalized.includes("ended") || normalized.includes("expired") || normalized.includes("inactive")) {
             return "ended";
         }

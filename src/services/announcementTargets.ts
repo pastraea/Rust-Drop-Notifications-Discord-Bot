@@ -3,6 +3,33 @@
  */
 export type AnnouncementPlatform = "twitch" | "kick";
 
+export interface AnnouncementDropChannels {
+    platform: string;
+    channels?: string[];
+    hasGeneralDrops?: boolean;
+}
+
+export function hasListedDropChannels(drop: AnnouncementDropChannels): boolean {
+    return Boolean(drop.hasGeneralDrops || drop.channels?.some((channel) => channel.trim()));
+}
+
+export function getDropChannelConfidence(drop: AnnouncementDropChannels): "listed" | "unknown" {
+    return hasListedDropChannels(drop) ? "listed" : "unknown";
+}
+
+export function getChannelsSummaryForDrop(drop: AnnouncementDropChannels): string {
+    const channels = Array.from(new Set((drop.channels ?? []).map((value) => value.trim()).filter(Boolean)));
+    const summaries: string[] = [];
+    if (drop.hasGeneralDrops && drop.platform.toLowerCase() === "twitch") {
+        summaries.push("General drops: any drops-enabled Rust stream (https://www.twitch.tv/directory/all/tags/Rust)");
+    }
+    if (channels.length > 0) {
+        const baseUrl = getAnnouncementPlatformBaseUrl(drop.platform);
+        summaries.push(`Streamer drops: ${channels.map((channel) => `${channel} (${baseUrl}/${channel})`).join(", ")}`);
+    }
+    return summaries.length > 0 ? summaries.join("\n") : getAnnouncementChannelsSummary(drop.platform);
+}
+
 const DEFAULT_ANNOUNCEMENT_STREAMERS: Record<AnnouncementPlatform, string[]> = {
     twitch: [],
     kick: []

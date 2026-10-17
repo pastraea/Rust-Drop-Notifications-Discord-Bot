@@ -2,7 +2,10 @@
 
 ## Current Coverage
 
-Current automated tests focus on alert-window timing behavior in `src/services/reminderService.test.ts`.
+Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`
+and Twitch campaign parsing in `src/providers/twitch.test.ts`.
+`src/services/dropFlow.test.ts` exercises provider HTML through real SQLite and mocked
+Discord sends, without logging into Discord or making live network requests.
 
 Covered areas:
 
@@ -10,6 +13,15 @@ Covered areas:
 - 12h reminder window behavior
 - 1h reminder window lookback logic
 - no-alert behavior for already-started drops
+- Facepunch published UTC date ranges, including upcoming countdowns targeting the start date
+- campaign status boundaries, multiple campaigns, and legacy countdown-only pages
+- invalid/missing dates and Helix fallback without fabricated timestamps
+- official streamer-card parsing without unrelated live-directory channels
+- per-campaign participant isolation and refreshed channel lists
+- general-drop persistence and migration from databases without the new column
+- manual checks for upcoming campaigns beyond 24 hours, including general-only campaigns
+- live announcements with correct channels and dedupe preserved
+- failed provider syncs retaining stored campaign participation
 
 ## Gaps and Next Targets
 

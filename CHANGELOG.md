@@ -8,6 +8,36 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.1.4] - 2026-10-17
+
+### Added
+
+- Regression tests for Twitch campaign dates and official participating-channel parsing.
+- Integration tests covering campaign HTML through SQLite persistence and mocked Discord sends, including schema migration, channel refresh, and live-alert dedupe.
+
+### Changed
+
+- Twitch now uses the official Facepunch campaign page as the primary source for dates and participation, with an optional Twitch API fallback.
+- Announcements distinguish general drops from streamer-specific drops and label participation as listed, without claiming a channel is currently live.
+- `/checkdrops` includes published upcoming campaigns beyond 24 hours; the default mode includes listed participation, while `mode:full` also includes unknown participation.
+- General-drop availability is persisted separately from named channels through an automatic additive database migration.
+- Updated command option labels and documentation to explain participation sources and manual-check behavior.
+
+### Fixed
+
+- Upcoming Facepunch countdowns no longer use the campaign start date as the end date or mark the campaign active from the Unix epoch.
+- Twitch campaigns no longer receive unrelated live Rust channels inferred from directory results or stream titles.
+- Campaign participants remain isolated per campaign and refresh on each successful sync.
+- General-only campaigns are no longer hidden by the default manual-check filter.
+- Upcoming campaigns remain visible in snapshots when another campaign on the same platform is active.
+- Missing or invalid Twitch dates no longer produce fabricated timestamps; if both official sources fail, the sync fails explicitly and preserves stored campaigns.
+
+### Upgrade Notes
+
+- Restart the bot after deploying and re-run `npm run deploy-commands` to refresh command option labels.
+- Existing databases migrate automatically; a successful sync replaces stale Facepunch campaign timing and participation data.
+- Scheduled 24h/12h/1h alert windows are unchanged. Existing Discord messages are not rewritten.
+
 ## [0.1.3] - 2026-03-12
 
 ### Added

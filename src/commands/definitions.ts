@@ -134,8 +134,8 @@ export const commandDefinitions = [
                 .setName("mode")
                 .setDescription("Snapshot mode")
                 .addChoices(
-                    { name: "verified only (default)", value: "verified" },
-                    { name: "full (verified, discovered, unknown, none)", value: "full" }
+                    { name: "listed participation (default)", value: "verified" },
+                    { name: "full (listed, unknown, none)", value: "full" }
                 )
                 .setRequired(false)
         ),

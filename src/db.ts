@@ -201,6 +201,7 @@ export class BotDb {
                   external_id as externalId,
                   title,
                   channels_json as channelsJson,
+                  has_general_drops as hasGeneralDrops,
                   game,
                   start_time as startTime,
                   end_time as endTime,
@@ -219,6 +220,7 @@ export class BotDb {
                   external_id as externalId,
                   title,
                   channels_json as channelsJson,
+                  has_general_drops as hasGeneralDrops,
                   game,
                   start_time as startTime,
                   end_time as endTime,
@@ -227,7 +229,8 @@ export class BotDb {
                 FROM drops
                 WHERE status IN ('upcoming', 'active')
                   AND datetime(start_time) > datetime('now')
-                  AND datetime(start_time) <= datetime('now', '+' || ? || ' hours')
+                  AND (? IS NULL OR datetime(start_time) <= datetime('now', '+' || ? || ' hours'))
+                ORDER BY datetime(start_time)
                 `
             ),
             wasNotificationSent: this.db.prepare(
@@ -258,12 +261,13 @@ export class BotDb {
             getSetting: this.db.prepare("SELECT value FROM settings WHERE key = ?"),
             upsertDrop: this.db.prepare(
                 `
-                INSERT INTO drops (platform, external_id, title, channels_json, game, start_time, end_time, status, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                INSERT INTO drops (platform, external_id, title, channels_json, has_general_drops, game, start_time, end_time, status, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(platform, external_id)
                 DO UPDATE SET
                   title = excluded.title,
                   channels_json = excluded.channels_json,
+                  has_general_drops = excluded.has_general_drops,
                   game = excluded.game,
                   start_time = excluded.start_time,
                   end_time = excluded.end_time,
@@ -279,6 +283,7 @@ export class BotDb {
                   external_id as externalId,
                   title,
                   channels_json as channelsJson,
+                  has_general_drops as hasGeneralDrops,
                   game,
                   start_time as startTime,
                   end_time as endTime,
@@ -338,6 +343,7 @@ export class BotDb {
                     drop.externalId,
                     drop.title,
                     channelsJson,
+                    drop.hasGeneralDrops ? 1 : 0,
                     drop.game.toLowerCase(),
                     drop.startTime,
                     drop.endTime,
@@ -378,6 +384,7 @@ export class BotDb {
         external_id TEXT NOT NULL,
         title TEXT NOT NULL,
                 channels_json TEXT NOT NULL DEFAULT '[]',
+                has_general_drops INTEGER NOT NULL DEFAULT 0,
         game TEXT NOT NULL,
         start_time TEXT NOT NULL,
         end_time TEXT NOT NULL,
@@ -487,11 +494,18 @@ export class BotDb {
         if (!hasChannelsJson) {
             this.db.exec("ALTER TABLE drops ADD COLUMN channels_json TEXT NOT NULL DEFAULT '[]'");
         }
+        if (!dropColumns.some((column) => column.name === "has_general_drops")) {
+            this.db.exec("ALTER TABLE drops ADD COLUMN has_general_drops INTEGER NOT NULL DEFAULT 0");
+        }
 
         const hasDisplayName = customGifColumns.some((column) => column.name === "display_name");
         if (!hasDisplayName) {
             this.db.exec("ALTER TABLE custom_gifs ADD COLUMN display_name TEXT");
         }
+    }
+
+    close(): void {
+        this.db.close();
     }
 
     /** Ensures a user row exists before writing user-scoped settings or state. */
@@ -560,6 +574,7 @@ export class BotDb {
                       external_id as externalId,
                       title,
                       channels_json as channelsJson,
+                      has_general_drops as hasGeneralDrops,
                       game,
                       start_time as startTime,
                       end_time as endTime,
@@ -791,6 +806,7 @@ export class BotDb {
                 drop.externalId,
                 drop.title,
                 channelsJson,
+                drop.hasGeneralDrops ? 1 : 0,
                 drop.game.toLowerCase(),
                 drop.startTime,
                 drop.endTime,
@@ -881,6 +897,7 @@ export class BotDb {
             externalId: String(row.externalId),
             title: String(row.title),
             channels: parsedChannels,
+            hasGeneralDrops: Boolean(row.hasGeneralDrops),
             game: String(row.game),
             startTime: String(row.startTime),
             endTime: String(row.endTime),
@@ -896,9 +913,10 @@ export class BotDb {
         return rows.map((row) => this.mapDropRow(row));
     }
 
-    getUpcomingDropsWithinHours(maxHours: number): Drop[] {
+    /** Omitting the horizon returns all published upcoming campaigns for manual snapshots. */
+    getUpcomingDropsWithinHours(maxHours?: number): Drop[] {
         const rows = this.hotStatements.getUpcomingDropsWithinHours
-            .all(maxHours);
+            .all(maxHours ?? null, maxHours ?? null);
 
         return rows.map((row) => this.mapDropRow(row));
     }

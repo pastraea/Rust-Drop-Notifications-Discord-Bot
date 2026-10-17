@@ -6,7 +6,7 @@ import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import { GifCodec } from "gifwrap";
 import type { BotDb, TimedAlertType } from "../db.js";
-import { getAnnouncementChannelsSummary } from "./announcementTargets.js";
+import { getChannelsSummaryForDrop, getDropChannelConfidence, hasListedDropChannels } from "./announcementTargets.js";
 import {
     APPROVED_RUST_GIF_VIEW_URLS,
     RARE_BEE_GIF_CHANCE,
@@ -36,6 +36,7 @@ type TimedDrop = {
     platform: string;
     title: string;
     channels?: string[];
+    hasGeneralDrops?: boolean;
     startTime: string;
     startTimeMs: number;
     endTime: string;
@@ -655,10 +656,10 @@ function getTimedAlertDueTypesFromMs(
 
 /** Aggregates platform drops into merged channels/campaigns and extreme (min/max) time. */
 function aggregatePlatformDrops(
-    drops: Array<{ title: string; channels?: string[] }>,
+    drops: Array<{ title: string; channels?: string[]; hasGeneralDrops?: boolean }>,
     timeSelector: (drop: { endTime?: string; startTime?: string; endTimeMs?: number; startTimeMs?: number }) => number,
     timeMode: "max" | "min"
-): { campaignSummary: string; mergedChannels: string[]; extremeTimeMs: number } {
+): { campaignSummary: string; mergedChannels: string[]; extremeTimeMs: number; hasGeneralDrops: boolean } {
     const titleSet = new Set<string>();
     const channelSet = new Set<string>();
     let extremeTimeMs = Number.NaN;
@@ -690,7 +691,8 @@ function aggregatePlatformDrops(
     return {
         campaignSummary: Array.from(titleSet).join(", "),
         mergedChannels: Array.from(channelSet),
-        extremeTimeMs
+        extremeTimeMs,
+        hasGeneralDrops: drops.some((drop) => drop.hasGeneralDrops)
     };
 }
 
@@ -739,10 +741,10 @@ function getSnapshotHeading(kind: TimedAlertType | "checkdrops" | "live"): strin
 }
 
 /** Builds a cross-platform snapshot message body for timed/checkdrops announcements. */
-function buildSnapshotContentLines(
+export function buildSnapshotContentLines(
     heading: string,
-    activeDrops: Array<{ platform: string; title: string; endTime: string; endTimeMs?: number; channels?: string[] }>,
-    upcomingDrops: Array<{ platform: string; title: string; startTime: string; startTimeMs?: number; channels?: string[] }>,
+    activeDrops: Array<{ platform: string; title: string; endTime: string; endTimeMs?: number; channels?: string[]; hasGeneralDrops?: boolean }>,
+    upcomingDrops: Array<{ platform: string; title: string; startTime: string; startTimeMs?: number; channels?: string[]; hasGeneralDrops?: boolean }>,
     mentionText: string,
     includeBlahLine: boolean
 ): string[] {
@@ -757,46 +759,51 @@ function buildSnapshotContentLines(
         lines.push(`Platform: **${capitalizePlatform(platform)}**`);
 
         if (platformActive.length > 0) {
-            const { campaignSummary, mergedChannels, extremeTimeMs } = aggregatePlatformDrops(
+            const { campaignSummary, mergedChannels, extremeTimeMs, hasGeneralDrops } = aggregatePlatformDrops(
                 platformActive,
                 (entry) => entry.endTimeMs ?? Date.parse(entry.endTime ?? ""),
                 "max"
             );
-            const channelsSummary = getChannelsSummaryForDrop({ platform, channels: mergedChannels });
-            const channelConfidence = getChannelConfidence("active", mergedChannels);
+            const participation = { platform, channels: mergedChannels, hasGeneralDrops };
+            const channelsSummary = getChannelsSummaryForDrop(participation);
+            const channelConfidence = getDropChannelConfidence(participation);
 
             lines.push("Status: active");
             lines.push(`Channels: ${channelsSummary}`);
-            if (mergedChannels.length > 0) {
+            if (hasListedDropChannels(participation)) {
                 lines.push(`Channel confidence: ${channelConfidence}`);
             }
             lines.push(`Campaigns: ${campaignSummary || "none"}`);
             lines.push(`Ends: <t:${Math.floor(extremeTimeMs / 1000)}:R>`);
-            continue;
         }
 
         if (platformUpcoming.length > 0) {
-            const { campaignSummary, mergedChannels, extremeTimeMs } = aggregatePlatformDrops(
+            if (platformActive.length > 0) {
+                lines.push("Upcoming campaigns:");
+            }
+            const { campaignSummary, mergedChannels, extremeTimeMs, hasGeneralDrops } = aggregatePlatformDrops(
                 platformUpcoming,
                 (entry) => entry.startTimeMs ?? Date.parse(entry.startTime ?? ""),
                 "min"
             );
-            const channelsSummary = getChannelsSummaryForDrop({ platform, channels: mergedChannels });
-            const channelConfidence = getChannelConfidence("upcoming", mergedChannels);
+            const participation = { platform, channels: mergedChannels, hasGeneralDrops };
+            const channelsSummary = getChannelsSummaryForDrop(participation);
+            const channelConfidence = getDropChannelConfidence(participation);
 
             lines.push("Status: upcoming");
             lines.push(`Channels: ${channelsSummary}`);
-            if (mergedChannels.length > 0) {
+            if (hasListedDropChannels(participation)) {
                 lines.push(`Channel confidence: ${channelConfidence}`);
             }
             lines.push(`Campaigns: ${campaignSummary || "none"}`);
             lines.push(`Starts: <t:${Math.floor(extremeTimeMs / 1000)}:R>`);
-            continue;
         }
 
-        lines.push("Status: none");
-        lines.push("Channels: none");
-        lines.push("Campaigns: none");
+        if (platformActive.length === 0 && platformUpcoming.length === 0) {
+            lines.push("Status: none");
+            lines.push("Channels: none");
+            lines.push("Campaigns: none");
+        }
     }
 
     lines.push(`Auto-ping: ${mentionText}`);
@@ -804,37 +811,6 @@ function buildSnapshotContentLines(
         lines.push("blah blah idk lmao");
     }
     return lines;
-}
-
-/** Formats channel summaries with links or fallback announcement text. */
-function getChannelsSummaryForDrop(drop: { platform: string; channels?: string[] }): string {
-    const channels = Array.from(new Set((drop.channels ?? []).map((value) => value.trim()).filter(Boolean)));
-    if (channels.length === 0) {
-        return getAnnouncementChannelsSummary(String(drop.platform));
-    }
-
-    const baseUrl = String(drop.platform).toLowerCase() === "kick" ? "https://kick.com" : "https://twitch.tv";
-    return channels.map((channel) => `${channel} (${baseUrl}/${channel})`).join(", ");
-}
-
-/** Maps drop status and channel presence to user-facing confidence labels. */
-function getChannelConfidence(
-    dropStatus: "active" | "upcoming" | "none",
-    channels: string[]
-): "verified" | "discovered" | "unknown" {
-    if (channels.length === 0) {
-        return "unknown";
-    }
-
-    if (dropStatus === "active") {
-        return "verified";
-    }
-
-    if (dropStatus === "upcoming") {
-        return "discovered";
-    }
-
-    return "unknown";
 }
 
 /** Evaluates timed due windows, sends timed snapshots, and marks dedupe records. */
@@ -981,8 +957,11 @@ export async function sendActiveDropReminders(
         const snapshotActiveDrops =
             forceMode === "full"
                 ? activeDrops
-                : activeDrops.filter((drop) => (drop.channels ?? []).length > 0);
-        const snapshotUpcomingDrops = forceMode === "full" ? upcomingDrops : [];
+                : activeDrops.filter(hasListedDropChannels);
+        const publishedUpcomingDrops = db.getUpcomingDropsWithinHours();
+        const snapshotUpcomingDrops = forceMode === "full"
+            ? publishedUpcomingDrops
+            : publishedUpcomingDrops.filter(hasListedDropChannels);
         const checkdropsUsers = db.getUserIdsForAlert("alert_checkdrops");
         const mentionText =
             checkdropsUsers.length > 0
@@ -1068,14 +1047,19 @@ export async function sendActiveDropReminders(
         const mergedChannels = Array.from(mergedChannelsSet);
         const channelsSummary = getChannelsSummaryForDrop({
             platform,
-            channels: mergedChannels
+            channels: mergedChannels,
+            hasGeneralDrops: platformDrops.some((drop) => drop.hasGeneralDrops)
         });
-        const channelConfidence = getChannelConfidence("active", mergedChannels);
+        const participation = {
+            platform, channels: mergedChannels,
+            hasGeneralDrops: platformDrops.some((drop) => drop.hasGeneralDrops)
+        };
+        const channelConfidence = getDropChannelConfidence(participation);
         const dedupedCampaignSummary = Array.from(campaignSummarySet).join(", ");
 
         contentLines.push(`Platform: **${capitalizePlatform(platform)}**`);
         contentLines.push(`Channels: ${channelsSummary}`);
-        if (mergedChannels.length > 0) {
+        if (hasListedDropChannels(participation)) {
             contentLines.push(`Channel confidence: ${channelConfidence}`);
         }
         contentLines.push(`Campaigns: ${dedupedCampaignSummary || "none"}`);

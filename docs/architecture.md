@@ -29,6 +29,12 @@ Track Rust drops from multiple providers, store campaign/user state, and send ti
 
 ## Design Decisions and Tradeoffs
 
+- Twitch participation:
+  - Facepunch is the primary authority for campaign dates, named streamer drops, and general drops.
+  - General-drop availability is persisted separately from named channels.
+  - Live directory results and stream titles are not evidence of campaign participation.
+  - Twitch API campaigns are an optional fallback when the official page fails.
+  - Manual checks include all published upcoming campaigns; scheduled alerts keep their timing windows.
 - SQLite for persistence:
   - Pros: simple deployment, no external DB requirement, reliable local durability
   - Tradeoff: single-file DB requires careful filesystem and backup handling

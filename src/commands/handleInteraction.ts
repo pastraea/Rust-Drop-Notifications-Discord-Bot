@@ -17,7 +17,7 @@ import type { AlertType, BotDb, GifMode, TimedAlertType } from "../db.js";
 import type { DropsProvider } from "../providers/base.js";
 import { runDropsCycle } from "../scheduler.js";
 import { RARE_BEE_GIF_CHANCE, RARE_BEE_GIF_VIEW_URL } from "../services/rustGifAllowlist.js";
-import { getAnnouncementChannelsSummary } from "../services/announcementTargets.js";
+import { getChannelsSummaryForDrop, getDropChannelConfidence, hasListedDropChannels } from "../services/announcementTargets.js";
 import { formatSecretsProgress } from "../services/secrets.js";
 import {
     CLOSING_PHRASE_COMMAND,
@@ -752,9 +752,8 @@ export async function handleChatInputCommand(
                     `Checkdrops manual ping: ${settings.alertCheckdrops ? "on" : "off"}`,
                     "",
                     "**Channel Confidence Legend**",
-                    "verified: active drop with concrete channel list",
-                    "discovered: upcoming drop with discovered channel list",
-                    "unknown: channels not published/discoverable yet",
+                    "listed: participating streamers or general drops listed by the provider (not a live-status check)",
+                    "unknown: participating channels not published",
                     "",
                     "**Provider Source Modes**",
                     ...sourceModeLines
@@ -967,7 +966,7 @@ export async function handleChatInputCommand(
         const replyDrops =
             checkdropsMode === "full"
                 ? activeDrops
-                : activeDrops.filter((drop) => drop.channels.length > 0);
+                : activeDrops.filter(hasListedDropChannels);
         const canRollRareBee = deps.db.getGifMode() === "default";
         const gotRareBee = canRollRareBee && Math.random() < RARE_BEE_GIF_CHANCE;
 
@@ -977,11 +976,8 @@ export async function handleChatInputCommand(
         }
 
         const targetDrop = replyDrops[0];
-        const resolvedChannels =
-            targetDrop.channels.length > 0
-                ? targetDrop.channels.join(", ")
-                : getAnnouncementChannelsSummary(String(targetDrop.platform));
-        const channelConfidence = targetDrop.channels.length > 0 ? "verified" : "unknown";
+        const resolvedChannels = getChannelsSummaryForDrop(targetDrop);
+        const channelConfidence = getDropChannelConfidence(targetDrop);
         const autoPingUsers = deps.db.getUserIdsForAlert("alert_checkdrops");
         const mentionText =
             autoPingUsers.length > 0
@@ -998,7 +994,7 @@ export async function handleChatInputCommand(
                 `Platform: **${targetDrop.platform}**`,
                 `Campaign: **${targetDrop.title}**`,
                 `Channels: ${resolvedChannels || "none"}`,
-                ...(targetDrop.channels.length > 0 ? [`Channel confidence: ${channelConfidence}`] : []),
+                ...(hasListedDropChannels(targetDrop) ? [`Channel confidence: ${channelConfidence}`] : []),
                 `Ends: <t:${Math.floor(new Date(targetDrop.endTime).getTime() / 1000)}:R>`,
                 `Auto-ping: ${mentionText}`,
                 ...(deps.db.isBlahBlahIdkLmaoEnabled() ? ["blah blah idk lmao"] : [])

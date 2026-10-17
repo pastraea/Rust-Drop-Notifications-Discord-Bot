@@ -25,6 +25,7 @@ export interface Drop {
     externalId: string;
     title: string;
     channels: string[];
+    hasGeneralDrops: boolean;
     game: string;
     startTime: string;
     endTime: string;
@@ -40,6 +41,7 @@ export interface NormalizedDrop {
     externalId: string;
     title: string;
     channels?: string[];
+    hasGeneralDrops?: boolean;
     game: string;
     startTime: string;
     endTime: string;
