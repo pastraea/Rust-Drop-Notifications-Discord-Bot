@@ -6,7 +6,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Import-Module (Join-Path $PSScriptRoot 'WindowsUninstall.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'WindowsDiscovery.psm1') -Force
 . (Join-Path $PSScriptRoot 'InstallScreen.ps1')
-$protectedRepository = Split-Path $PSScriptRoot -Parent
+$protectedRepository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $script:scan = $null
 $script:worker = $null
 $script:operation = $null

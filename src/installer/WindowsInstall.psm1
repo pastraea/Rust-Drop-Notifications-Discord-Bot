@@ -211,7 +211,7 @@ function Get-InstallationPlan {
 }
 
 function Copy-BundledBot([string]$Source, [string]$Destination) {
-    foreach ($name in @('package.json', 'package-lock.json', 'tsconfig.json', 'src', 'installer', 'LICENSE', 'README.md', '.env.example')) {
+    foreach ($name in @('package.json', 'package-lock.json', 'tsconfig.json', 'src', 'LICENSE', 'README.md', '.env.example')) {
         $path = Join-Path $Source $name
         Assert-PlainPath $path
         if (-not (Test-Path -LiteralPath $path)) { throw "Bundled file missing: $name" }
@@ -344,7 +344,7 @@ function Install-WindowsBot($Plan) {
         Invoke-InstallCommand $tools.Npm @('ci', '--no-audit', '--no-fund') $stage 'Dependency installation'
         Invoke-InstallCommand $tools.Npm @('run', 'build') $stage 'Bot build'
         if (-not (Test-Path -LiteralPath (Join-Path $stage 'dist\index.js'))) { throw 'Build did not produce the bot entry point.' }
-        $validation = Join-Path $stage 'installer\validateConfiguration.cjs'
+        $validation = Join-Path $stage 'src\installer\validateConfiguration.cjs'
         [IO.File]::WriteAllText((Join-Path $stage '.env'), $fresh.Environment, (New-Object Text.UTF8Encoding $false))
         Invoke-InstallCommand $tools.Node @($validation) $stage 'Configuration validation'
         if ($Plan.Options.RegisterCommands) {
@@ -364,7 +364,7 @@ function Install-WindowsBot($Plan) {
                 # The running setup copy is never removed. SQLite's online backup API handles a live WAL database.
                 $dataPaths = @(Get-BotDataPaths $Plan.Options.ReuseFolder)
                 New-Item -ItemType Directory -Path (Join-Path $stage 'data') -Force | Out-Null
-                Invoke-InstallCommand $tools.Node @((Join-Path $stage 'installer\backupDatabase.cjs'), $dataPaths[1], (Join-Path $stage 'data\bot.db')) $stage 'Database backup'
+                Invoke-InstallCommand $tools.Node @((Join-Path $stage 'src\installer\backupDatabase.cjs'), $dataPaths[1], (Join-Path $stage 'data\bot.db')) $stage 'Database backup'
             } else {
                 if (-not (Test-Path -LiteralPath (Join-Path $reuseBackup 'bot.db'))) {
                     throw 'The selected database disappeared before backup. Recovery files were kept; verify them before retrying.'

@@ -8,6 +8,25 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.2.2] - 2026-10-18
+
+### Changed
+
+- Moved installer source into `src/installer` and updated launch commands, executable packaging, CI, and tests to use the new location.
+
+### Added
+
+- Single-file Windows setup executable that embeds the existing setup UI and bot source and opens without Node.js, npm, or a repository checkout.
+- Windows-native build script and optional `npm run build:installer` command, with no additional compiler/package dependencies.
+- Private temporary extraction, duplicate-setup prevention, explicit launch/cleanup errors, and cleanup after closing setup.
+- Packaging tests covering embedded-file contents, private-data exclusion, a real UI launch without Node.js/npm on PATH, and temporary extraction cleanup.
+- Windows CI executable build/testing and downloadable workflow artifact.
+
+### Installation Notes
+
+- The executable is unsigned and uses Windows PowerShell 5.1/.NET Framework included with normal Windows 10/11 installations. Run as administrator under the intended bot user for installation.
+- Node.js/npm are still required to install and run the bot; downloading Node.js remains opt-in. No release asset is published automatically.
+
 ## [0.2.1] - 2026-10-18
 
 ### Changed

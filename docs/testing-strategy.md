@@ -24,7 +24,7 @@ Covered areas:
 - failed provider syncs retaining stored campaign participation
 - Windows uninstall detection, process-tree isolation, confirmation preconditions,
   data preservation/deletion, protected folders, and WPF layout loading in
-  `installer/Test-WindowsUninstall.ps1`; scheduled-task and process calls are mocked
+  `src/installer/Test-WindowsUninstall.ps1`; scheduled-task and process calls are mocked
 - Windows discovery adapters for tasks, services/NSSM, registry startup entries,
   Startup scripts and processes; identity checks on renamed/unrelated folders,
   bounded common scans, deep scans, and incomplete-scan removal blocking
@@ -38,8 +38,12 @@ Covered areas:
 - Staged installation before cleanup, database/config reuse, private recovery ACLs,
   changed-scan rejection, fresh-install isolation from bundled secrets, command-output
   redaction, opt-in Node.js provisioning, and limited current-user logon task settings.
-  `installer/Test-WindowsInstall.ps1` is invoked by the main installer test script.
+  `src/installer/Test-WindowsInstall.ps1` is invoked by the main installer test script.
   A temporary live-WAL SQLite backup is tested when Node.js/dependencies are present.
+- Standalone EXE compilation using the Windows .NET Framework compiler, embedded
+  payload completeness/content and exclusion of private/build files, extraction
+  verification, and a real UI open/close with Node.js/npm absent from PATH.
+  Temporary extraction cleanup is checked after the launcher exits.
 
 ## Gaps and Next Targets
 
@@ -70,6 +74,8 @@ Covered areas:
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:installer` (Windows only; also runs in the separate Windows CI job)
+- `powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\src\installer\Test-Executable.ps1`
+  (Windows only; builds the executable and opens/closes the setup UI without installing anything)
 
 ## Quality Bar
 

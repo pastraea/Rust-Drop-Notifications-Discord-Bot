@@ -33,7 +33,7 @@ try {
     $env:ProgramData = Join-Path $temporary 'program-data'
     $source = Join-Path $temporary 'bundle'
     New-Item -ItemType Directory -Path $source | Out-Null
-    foreach ($name in @('src', 'installer')) { New-Item -ItemType Directory -Path (Join-Path $source $name) | Out-Null }
+    New-Item -ItemType Directory -Path (Join-Path $source 'src\installer') -Force | Out-Null
     foreach ($name in @('package.json', 'package-lock.json')) {
         '{"name":"rust-drops-reminder-bot","version":"0.1.4"}' | Set-Content (Join-Path $source $name)
     }
@@ -55,7 +55,7 @@ try {
             Assert-InstallTest ($message -match 'Fixture command failed' -and $message -notmatch 'FIXTURE_SECRET_MUST_NOT_LEAK') 'Command failure exposed secret stderr.'
             Assert-InstallTest ([Environment]::GetEnvironmentVariable('DISCORD_TOKEN', 'Process') -eq 'fixture-inherited-token') 'Command wrapper did not restore inherited environment.'
         } finally { [Environment]::SetEnvironmentVariable('DISCORD_TOKEN', $oldToken, 'Process') }
-        $runtimeConfig = Join-Path (Split-Path $PSScriptRoot -Parent) 'dist\config.js'
+        $runtimeConfig = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\config.js'
         if (Test-Path -LiteralPath $runtimeConfig) {
             $configurationFixture = Join-Path $temporary 'verify-configuration.cjs'
             [IO.File]::WriteAllText($configurationFixture, @'
@@ -71,7 +71,7 @@ for (const interval of ["300000", "NaN", "0", "Infinity"]) {
             & $nativeNode.Source $configurationFixture (Join-Path $PSScriptRoot 'validateConfiguration.cjs') $temporary
             Assert-InstallTest ($LASTEXITCODE -eq 0) 'Staged configuration validation did not accept valid settings or reject invalid polling intervals.'
         }
-        $databaseModule = Join-Path (Split-Path $PSScriptRoot -Parent) 'node_modules\better-sqlite3'
+        $databaseModule = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'node_modules\better-sqlite3'
         if (Test-Path -LiteralPath $databaseModule) {
             $backupFixture = Join-Path $temporary 'verify-backup.cjs'
             [IO.File]::WriteAllText($backupFixture, @'

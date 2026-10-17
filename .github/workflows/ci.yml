@@ -14,7 +14,15 @@ jobs:
         uses: actions/checkout@v7
       - name: Test Windows uninstall safeguards and desktop layout
         shell: powershell
-        run: .\installer\Test-WindowsUninstall.ps1
+        run: .\src\installer\Test-WindowsUninstall.ps1
+      - name: Build and test standalone Windows executable
+        shell: powershell
+        run: .\src\installer\Test-Executable.ps1
+      - name: Upload Windows setup executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-setup
+          path: artifacts/*.exe
 
   build-and-test:
     runs-on: ubuntu-latest

@@ -108,6 +108,18 @@ not restart automatically until explicitly re-enabled or reconfigured.
 
 ## Windows Install / Reinstall
 
+The standalone setup EXE opens the same UI without npm, Node.js, or a checkout.
+Right-click the EXE and choose **Run as administrator** for installation, under
+the intended bot account. It uses the Windows-provided .NET Framework and Windows
+PowerShell 5.1. Only opening/checking the setup UI is independent of Node.js/npm;
+installing and running the bot still require them.
+
+Setup extracts its embedded source to a private, unique temporary folder and
+removes that folder after the setup window closes. Recovery backups below are
+separate and intentionally retained. Cleanup failures report the exact folder
+to remove. The executable is unsigned; no automatic update or release download
+is performed by the launcher.
+
 Run the setup window as administrator using the intended bot account. Select
 **Install / Reinstall**. Fill in the
 destination and masked credentials, or opt into reusing a scanned configuration.

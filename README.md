@@ -88,6 +88,38 @@ Setup:
 
 ### Windows setup window
 
+#### Standalone executable
+
+The standalone `Rust-Drop-Notifications-Discord-Bot-Setup-<version>.exe` opens the
+same desktop setup window without Node.js, npm, or a repository checkout. Copy
+the single EXE to a Windows 10/11 computer and double-click it. For installation
+or privileged cleanup, right-click it and choose **Run as administrator**, using
+the intended bot account. Windows PowerShell 5.1 and .NET Framework (included in
+normal Windows 10/11 installations) are required.
+
+The EXE embeds the setup scripts and bot source, extracts a private temporary
+copy, and removes that copy when setup closes. Existing installations and the
+separate recovery backups are not deleted by this temporary-file cleanup.
+The launcher is unsigned; Windows may show an unknown-publisher or SmartScreen
+warning. Dependencies are not bundled: installing/running the bot still requires
+Node.js/npm and internet access. The setup's Node.js installation checkbox remains
+opt-in.
+
+Build the EXE on Windows, without npm or additional compiler downloads:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\src\installer\Build-Executable.ps1
+```
+
+Alternatively, use `npm run build:installer`. The output is in `artifacts\` and is
+not committed. The build uses the Windows .NET Framework C# compiler and embeds
+only the required source/setup files, not credentials, databases, dependencies,
+or the checkout's development metadata. Windows CI tests the EXE and uploads it
+as the `windows-setup` workflow artifact; this does not automatically publish a
+GitHub release asset.
+
+#### Launch from source
+
 On Windows, open the desktop setup window from a repository checkout:
 
 ```powershell
@@ -97,7 +129,7 @@ npm run installer
 Node.js is not required to launch the window directly:
 
 ```powershell
-powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\installer\Start-Installer.ps1
+powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\src\installer\Start-Installer.ps1
 ```
 
 The window has three main buttons, left to right: **Check installation**,
@@ -150,7 +182,7 @@ Run the window from an elevated PowerShell if task cleanup requires administrato
 permissions. Failures are displayed explicitly; some cleanup may already have
 completed, so check again before retrying. Shared Node.js/npm, Discord-side settings,
 Windows services, PM2, Docker, and unsupported installations are not automatically
-removed. Linux support and packaged downloads are not implemented yet.
+removed. Linux support is not implemented.
 
 #### Install or reinstall
 
