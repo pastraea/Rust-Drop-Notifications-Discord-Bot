@@ -139,3 +139,42 @@ Installed startup uses the original `RustDropsBot` launcher/task identity so the
 uninstaller can recognize it. It starts at the current user's logon, not boot.
 Shortcuts are ownership-recorded and removed only when their target still matches.
 Node.js/npm remain shared prerequisites and are not removed during uninstall.
+
+## Launch-Time Automatic Updates (Windows)
+
+Automatic updating is opt-in in the install/reinstall screen and changeable under
+**More**. It applies to the current Windows user's setup EXE launches and the
+one installer-managed bot recorded in
+`%LOCALAPPDATA%\RustDropsBot-Updater\settings.json`. There is no separate permanent
+service or polling task: the updater is a separate one-shot process before launch.
+Stopping the bot and opening its shortcut triggers one check. A bot that remains
+running never polls GitHub. Direct npm/development launches bypass the updater.
+
+The latest stable GitHub release must include the expected EXE asset and GitHub
+SHA-256 digest. Checks have a 15-second API timeout; downloads have a 120-second
+timeout. Dependency build duration depends on the machine/network. No automatic
+Node.js upgrade or Discord command deployment occurs. A network/build failure
+is logged and leaves the old version available to launch. A maintenance-lock
+conflict or failed restoration blocks launch rather than starting during mutation.
+
+Review `%LOCALAPPDATA%\RustDropsBot-Updater\updater.log` for failures and retained
+backup paths. Setup displays a warning if its check fails. Bot launcher failures
+continue to use its existing logs; the dedicated updater log persists even when
+the launcher is hidden. Fix permissions, prerequisites, or network access, then
+retry on the next launch; there is no retry loop.
+
+On successful bot update the entire old installation is retained under
+`.rust-drops-update-<id>\previous` beside the bot. It includes sensitive `.env` and
+database files. Staging failures may also retain a private `prepared` folder.
+For recovery: disable automatic updates under More, stop the bot/startup task,
+verify no process is using either copy, and restore the complete previous copy to
+the original path. Do not mix old code with a newly migrated database. Restart and
+verify Discord status; remove only the specific obsolete backup folders after
+verification. Do not delete all similarly named directories blindly.
+
+Uninstall disables the preference only when its recorded installation matches.
+Caches, logs, and backups are retained, not registered as startup services.
+Changing preferences during an active update affects the next launch only.
+Opening an old setup EXE can hand off to the latest verified cached EXE without
+overwriting the downloaded original. Failed bot readiness after activation does
+not trigger an automatic database rollback.

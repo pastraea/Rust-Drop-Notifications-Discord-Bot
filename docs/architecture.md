@@ -13,6 +13,25 @@ Track Rust drops from multiple providers, store campaign/user state, and send ti
 - Reminder service: `src/services/reminderService.ts`
 - Interaction handlers: `src/commands/handleInteraction.ts`
 - Persistence: `src/db.ts`
+- Optional Windows launch-time updater: `src/installer/Invoke-Updater.ps1` and
+  `src/installer/WindowsUpdate.psm1`, outside the bot runtime/scheduler.
+
+## Windows Update Lifecycle
+
+An explicit per-user opt-in permits one GitHub latest-stable-release check before
+setup EXE or installed-bot startup. The setup EXE invokes the updater as a separate
+PowerShell process and hands off to a verified cached newer EXE. The installed
+launcher holds the duplicate-bot mutex, leaves the installation working directory,
+waits for the separate updater, then starts the bot. No periodic worker, Windows
+service, or new scheduled updater task is installed.
+
+The updater validates the fixed repository's release asset URL, SHA-256 digest,
+package identity/version, extraction paths, and archive bounds. Bot changes stage
+dependencies/build/config checks first, then copy local state while the bot is
+idle and move the prepared tree into place. The old tree is retained for recovery.
+Activation failure restores the old tree; failed restoration blocks startup.
+Installer/removal/update mutations share a maintenance mutex. User credentials
+are never sent to GitHub, and updater checks do not use Discord credentials.
 
 ## Runtime Flow
 

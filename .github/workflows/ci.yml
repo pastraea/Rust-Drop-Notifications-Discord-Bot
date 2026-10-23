@@ -23,6 +23,9 @@ jobs:
         with:
           name: windows-setup
           path: artifacts/*.exe
+      - name: Test isolated launch-time updates
+        shell: powershell
+        run: .\src\installer\Test-WindowsUpdate.ps1
 
   build-and-test:
     runs-on: ubuntu-latest

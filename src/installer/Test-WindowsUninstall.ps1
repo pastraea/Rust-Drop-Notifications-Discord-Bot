@@ -18,9 +18,11 @@ function Assert-Throws([scriptblock]$Action, [string]$Pattern) {
 
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('rust-uninstall-tests-' + [guid]::NewGuid())
 $originalProgramData = $env:ProgramData
+$originalLocalAppData = $env:LOCALAPPDATA
 try {
     New-Item -ItemType Directory -Path $temporary | Out-Null
     $env:ProgramData = Join-Path $temporary 'program-data'
+    $env:LOCALAPPDATA = Join-Path $temporary 'local-appdata'
     $repository = Join-Path $temporary 'old-installation'
     New-Item -ItemType Directory -Path $repository | Out-Null
     '{"name":"rust-drops-reminder-bot"}' | Set-Content -LiteralPath (Join-Path $repository 'package.json')
@@ -140,7 +142,10 @@ try {
     'database' | Set-Content (Join-Path $repository 'data\bot.db')
     'log' | Set-Content (Join-Path $startup 'bot-out.log')
     'leave this' | Set-Content (Join-Path $startup 'unrelated.txt')
+    Import-Module (Join-Path $PSScriptRoot 'WindowsUpdate.psm1')
+    Set-UpdateSettings -Enabled $true -Repository $repository
     $result = Remove-BotInstallation -Plan $plan -DeleteData $false -DeleteFolder $false -ProtectedRepository $PSScriptRoot
+    Assert-True (-not (Get-UpdateSettings).Enabled -and (Get-UpdateSettings).Repository -eq '') 'Uninstall must disable updates for its installation.'
     Assert-True ($result -match 'finished') 'Uninstall result missing.'
     Assert-True (Test-Path (Join-Path $repository '.env')) 'Keep-data uninstall removed credentials.'
     Assert-True (Test-Path (Join-Path $repository 'data\bot.db')) 'Keep-data uninstall removed database.'
@@ -310,8 +315,9 @@ try {
             Assert-True ($null -ne $window.FindName($name)) "Missing WPF control: $name"
         }
         $more = $window.FindName('More')
+        Assert-True ($more.Content.Content.Children[0].Name -eq 'AutoUpdates') 'Automatic updates must appear first in More.'
         Assert-True ($more.Header -eq 'More' -and -not $more.IsExpanded) 'More must be named correctly and collapsed by default.'
-        foreach ($name in @('Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse')) {
+        foreach ($name in @('Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse', 'AutoUpdates')) {
             $ancestor = $window.FindName($name)
             while ($null -ne $ancestor -and $ancestor -ne $more) {
                 $ancestor = [Windows.LogicalTreeHelper]::GetParent($ancestor)
@@ -453,6 +459,7 @@ try {
                 Assert-True ($setup.FindName('Token') -is [Windows.Controls.PasswordBox]) 'Token must be masked.'
                 Assert-True $setup.FindName('Cancel').IsCancel 'Cancel must dismiss the install screen.'
                 Assert-True (-not $setup.FindName('AllowNodeInstall').IsChecked) 'Node installation must require consent.'
+                Assert-True (-not $setup.FindName('AutoUpdates').IsChecked) 'Automatic updates must require consent.'
                 Assert-True ($setup.FindName('ReuseFolder').Items.Count -eq 2) 'Reuse installation choices missing.'
             } finally { $setup.Close() }
         } finally {
@@ -468,6 +475,7 @@ try {
     Write-Output "Passed $script:passed Windows uninstall assertions. All OS calls were mocked."
 } finally {
     $env:ProgramData = $originalProgramData
+    $env:LOCALAPPDATA = $originalLocalAppData
     Remove-Module $module.Name -Force
     if (Test-Path -LiteralPath $temporary) {
         foreach ($item in @(Get-ChildItem -LiteralPath $temporary -Force)) {

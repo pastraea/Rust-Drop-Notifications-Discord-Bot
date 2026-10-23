@@ -1,6 +1,6 @@
 {
     "name": "rust-drops-reminder-bot",
-    "version": "0.2.3",
+    "version": "0.3.0",
     "private": true,
     "description": "Discord reminder bot for Twitch and Kick Rust drops",
     "author": "Thomas Benton",
@@ -10,6 +10,7 @@
         "build:installer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File src\\installer\\Build-Executable.ps1",
         "installer": "powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File src\\installer\\Start-Installer.ps1",
         "test:installer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File src\\installer\\Test-WindowsUninstall.ps1",
+        "test:updater": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File src\\installer\\Test-WindowsUpdate.ps1",
         "dev": "tsx src/index.ts",
         "build": "tsc -p tsconfig.json",
         "test": "tsx --test src/**/*.test.ts",

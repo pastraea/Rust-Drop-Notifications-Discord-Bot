@@ -183,7 +183,32 @@ function Assert-RemovableFolder([string]$Repository, [string]$ProtectedRepositor
     }
 }
 
+function Invoke-BotMaintenance {
+    param([scriptblock]$Action)
+    $mutex = New-Object Threading.Mutex($false, 'Local\RustDropNotificationsUpdater')
+    $acquired = $false
+    try {
+        try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
+        if (-not $acquired) { throw 'Another installation, removal, or update is in progress. Wait and try again.' }
+        & $Action
+    } finally {
+        if ($acquired) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
 function Remove-BotInstallation {
+    param(
+        [Parameter(Mandatory)]$Plan, [bool]$DeleteData, [bool]$DeleteFolder,
+        [string]$BackupDataDirectory, [Parameter(Mandatory)][string]$ProtectedRepository
+    )
+    Invoke-BotMaintenance {
+        Remove-BotInstallationCore -Plan $Plan -DeleteData $DeleteData -DeleteFolder $DeleteFolder `
+            -BackupDataDirectory $BackupDataDirectory -ProtectedRepository $ProtectedRepository
+    }
+}
+
+function Remove-BotInstallationCore {
     param(
         [Parameter(Mandatory)]$Plan,
         [bool]$DeleteData,
@@ -260,6 +285,12 @@ function Remove-BotInstallation {
             }
         }
     }
+    $updateModule = Join-Path $PSScriptRoot 'WindowsUpdate.psm1'
+    if (Test-Path -LiteralPath $updateModule) {
+        Import-Module $updateModule
+        $updateSettings = Get-UpdateSettings
+        if ($updateSettings.Repository -ieq $fresh.Repository) { Set-UpdateSettings -Enabled $false -Repository '' }
+    }
     Remove-BotOwnedShortcuts $fresh.Repository
     $launcherFiles = @()
     if (-not $manual) { $launcherFiles = @($fresh.Launcher, (Join-Path $fresh.Startup 'bot-out.log'), (Join-Path $fresh.Startup 'bot-err.log')) }
@@ -330,4 +361,4 @@ function Get-RemovalStartupScan {
 }
 
 Import-Module (Join-Path $PSScriptRoot 'WindowsDiscovery.psm1') -Force
-Export-ModuleMember -Function Get-BotInstallation, Remove-BotInstallation, Assert-RemovableFolder, Get-LauncherRepository, Get-BotDataPaths, Test-ChildPath, Assert-PlainPath
+Export-ModuleMember -Function Get-BotInstallation, Remove-BotInstallation, Assert-RemovableFolder, Get-LauncherRepository, Get-BotDataPaths, Test-ChildPath, Assert-PlainPath, Invoke-BotMaintenance

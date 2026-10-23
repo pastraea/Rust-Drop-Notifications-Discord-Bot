@@ -24,7 +24,7 @@ internal static class SetupLauncher
             bool acquired = false;
             try
             {
-                if (args.Length > 1 || (args.Length == 1 && args[0] != "--verify-package"))
+                if (args.Length > 1 || (args.Length == 1 && args[0] != "--verify-package" && args[0] != "--skip-update"))
                     throw new ArgumentException("Unsupported setup argument.");
                 try { acquired = mutex.WaitOne(0); }
                 catch (AbandonedMutexException) { acquired = true; }
@@ -65,15 +65,55 @@ internal static class SetupLauncher
                     @"src\installer\Start-Installer.ps1", @"src\installer\InstallScreen.ps1",
                     @"src\installer\WindowsInstall.psm1", @"src\installer\WindowsUninstall.psm1",
                     @"src\installer\WindowsDiscovery.psm1", @"src\installer\backupDatabase.cjs",
+                    @"src\installer\WindowsUpdate.psm1", @"src\installer\Invoke-Updater.ps1",
                     @"src\installer\validateConfiguration.cjs", "package.json", "package-lock.json",
                     "tsconfig.json", @"src\index.ts", ".env.example", "LICENSE", "README.md" })
                     if (!File.Exists(Path.Combine(workspace, required)))
                         throw new InvalidDataException("The embedded setup package is incomplete: " + required);
 
-                if (args.Length == 0)
+                if (args.Length == 0 || args[0] == "--skip-update")
                 {
                     string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                         @"WindowsPowerShell\v1.0\powershell.exe");
+                    if (args.Length == 0)
+                    {
+                        string cache = Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA"),
+                            @"RustDropsBot-Updater\setup");
+                        var check = new ProcessStartInfo(powershell, "-NoProfile -ExecutionPolicy Bypass -File \"" +
+                            Path.Combine(workspace, @"src\installer\Invoke-Updater.ps1") +
+                            "\" -Mode Setup -CurrentVersion " + FileVersionInfo.GetVersionInfo(
+                                Assembly.GetExecutingAssembly().Location).ProductVersion +
+                            " -WorkDirectory \"" + cache + "\"");
+                        check.UseShellExecute = false;
+                        check.CreateNoWindow = true;
+                        check.RedirectStandardOutput = true;
+                        using (var update = Process.Start(check))
+                        {
+                            string downloaded = update.StandardOutput.ReadToEnd().Trim();
+                            update.WaitForExit();
+                            if (update.ExitCode == 2)
+                                throw new InvalidOperationException("Another updater is running or update recovery is required. See the updater log in LOCALAPPDATA\\RustDropsBot-Updater.");
+                            if (update.ExitCode != 0)
+                                MessageBox.Show("The update check failed. Opening the existing setup. See LOCALAPPDATA\\RustDropsBot-Updater\\updater.log.",
+                                    "Automatic update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            else if (downloaded.Length > 0)
+                            {
+                                string path = Path.GetFullPath(downloaded);
+                                if (!path.StartsWith(cache + Path.DirectorySeparatorChar,
+                                    StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+                                    throw new InvalidDataException("Updater returned an invalid executable path.");
+                                mutex.ReleaseMutex();
+                                acquired = false;
+                                var replacement = new ProcessStartInfo(path, "--skip-update");
+                                replacement.UseShellExecute = false;
+                                using (var updated = Process.Start(replacement))
+                                {
+                                    updated.WaitForExit();
+                                    return updated.ExitCode;
+                                }
+                            }
+                        }
+                    }
                     var start = new ProcessStartInfo(powershell,
                         "-NoProfile -STA -ExecutionPolicy Bypass -File \"" + script + "\"");
                     start.UseShellExecute = false;

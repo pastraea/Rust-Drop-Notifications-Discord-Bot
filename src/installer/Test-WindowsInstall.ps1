@@ -22,6 +22,7 @@ function New-TestOptions([string]$Destination) {
         ReuseFolder = ''; ReuseConfiguration = $false; ReuseDatabase = $false
         RunOnLogon = $false; StartNow = $false; RegisterCommands = $false
         DesktopShortcut = $false; StartMenuShortcut = $false; AllowNodeInstall = $false
+        AutoUpdates = $false
     }
 }
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('rust-install-tests-' + [guid]::NewGuid())
@@ -147,6 +148,7 @@ try {
     Assert-InstallFailure { New-InstallEnvironment $options } 'newlines'
     $options.Token = 'test-only-secret-not-a-real-token'
     $options.RegisterCommands = $true
+    $options.AutoUpdates = $true
     $options.GuildId = ''
     Assert-InstallFailure { New-InstallEnvironment $options } 'server ID'
     $options.GuildId = '234567890123456789'
@@ -218,6 +220,8 @@ try {
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination '.env')) -match 'replacement-test-token') 'Installed configuration missing.'
     Assert-InstallTest (Test-Path (Join-Path $options.Destination 'dist\index.js')) 'Built files not installed.'
     Assert-InstallTest (Test-Path (Join-Path $options.Destination '.rust-drops-install.json')) 'Ownership metadata missing.'
+    $updateSettings = & $module { Get-UpdateSettings }
+    Assert-InstallTest ($updateSettings.Enabled -and $updateSettings.Repository -eq $options.Destination) 'Installer did not save update opt-in and target identity.'
     Assert-InstallTest ($result -notmatch 'replacement-test-token') 'Install result leaked credentials.'
     Assert-InstallTest ($result -match 'recovery') 'Recovery location missing from result.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $source '.env')).Trim() -eq 'do-not-copy') 'Source credentials modified.'
@@ -239,6 +243,7 @@ try {
     $options.RunOnLogon = $false
     $options.StartNow = $false
     $options.RegisterCommands = $false
+    $options.AutoUpdates = $false
     $options.Destination = Join-Path $temporary 'fresh-install'
     & $module { $script:fixtureScan.Folders = @() }
     $plan = Get-InstallationPlan $options $source
@@ -246,6 +251,7 @@ try {
     $null = Install-WindowsBot $plan
     $events = @(& $module { $script:events })
     Assert-InstallTest ($events -notcontains 'startup' -and $events -notcontains 'start-now' -and $events -notcontains 'Discord command registration') 'Unchecked options caused side effects.'
+    Assert-InstallTest (-not (& $module { Get-UpdateSettings }).Enabled) 'Disabling updates in installation options did not save opt-out.'
     Assert-InstallTest (-not (Test-Path (Join-Path $options.Destination 'data\bot.db'))) 'Fresh install copied bundled database.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination '.env')) -notmatch 'do-not-copy') 'Fresh install copied source secrets.'
 

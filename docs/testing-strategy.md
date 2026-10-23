@@ -44,6 +44,16 @@ Covered areas:
   payload completeness/content and exclusion of private/build files, extraction
   verification, and a real UI open/close with Node.js/npm absent from PATH.
   Temporary extraction cleanup is checked after the launcher exits.
+- An offline compiled bootstrap fixture hands off to another real EXE and reopens
+  the setup window exactly once, retaining the cache and cleaning temporary source
+  extractions. No GitHub requests or bot installation occur in this handoff test.
+- Optional updater controls, persisted opt-in/opt-out, uninstall preference cleanup,
+  and default-disabled EXE startup without a live GitHub request.
+- Isolated updater release/version/digest/URL validation, cached downloads,
+  rejection of malformed payload paths, maintenance locking, running-bot refusal,
+  staging failure preservation, activation restoration, and config/database/WAL/SHM
+  preservation. GitHub/download/Node/process adapters are mocked; actual temporary
+  directory moves and compiled EXE resource extraction are exercised.
 
 ## Gaps and Next Targets
 
@@ -74,6 +84,7 @@ Covered areas:
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:installer` (Windows only; also runs in the separate Windows CI job)
+- `npm run test:updater` (Windows only; build the setup EXE first for embedded-payload checks)
 - `powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\src\installer\Test-Executable.ps1`
   (Windows only; builds the executable and opens/closes the setup UI without installing anything)
 

@@ -238,6 +238,24 @@ function Write-InstallLauncher([string]$Destination, $Tools) {
         '$mutex = New-Object Threading.Mutex($false, "Local\RustDropsBot")'
         'if (-not $mutex.WaitOne(0)) { $mutex.Dispose(); exit 0 }'
         'try {'
+        '$updateModule = Join-Path (Get-Location) "src\installer\WindowsUpdate.psm1"'
+        'if (Test-Path -LiteralPath $updateModule) {'
+        'Import-Module $updateModule -Force'
+        '$updateSettings = Get-UpdateSettings'
+        'if ($updateSettings.Enabled) {'
+        '$version = (Get-Content -LiteralPath ".\package.json" -Raw | ConvertFrom-Json).version'
+        '$repository = (Get-Location).Path'
+        '$updateScript = Join-Path (Get-Location) "src\installer\Invoke-Updater.ps1"'
+        '$updateWork = Join-Path (Split-Path (Get-Location).Path -Parent) (".rust-drops-update-" + [guid]::NewGuid().ToString())'
+        'Set-Location (Split-Path $repository -Parent)'
+        '[Environment]::CurrentDirectory = (Get-Location).Path'
+        '& (Join-Path $PSHOME "powershell.exe") -NoProfile -ExecutionPolicy Bypass -File $updateScript -Mode Bot -CurrentVersion $version -Repository $repository -WorkDirectory $updateWork'
+        '$updateExitCode = $LASTEXITCODE'
+        'Set-Location $repository'
+        'if ($updateExitCode -eq 2) { throw "Update requires recovery or another update is running. See the updater log in LOCALAPPDATA\RustDropsBot-Updater." }'
+        'if ($updateExitCode -ne 0) { Write-Warning "Update failed; starting the retained bot. See LOCALAPPDATA\RustDropsBot-Updater\updater.log." }'
+        '}'
+        '}'
         'npm run start 1>> "' + (Join-Path $startup 'bot-out.log') + '" 2>> "' + (Join-Path $startup 'bot-err.log') + '"'
         '$botExitCode = $LASTEXITCODE'
         '} finally { $mutex.ReleaseMutex(); $mutex.Dispose() }'
@@ -306,6 +324,15 @@ function Start-InstalledBot([string]$Launcher, [bool]$Startup) {
 }
 
 function Install-WindowsBot($Plan) {
+    $result = Invoke-BotMaintenance { Install-WindowsBotCore $Plan }
+    if ($Plan.Options.StartNow) {
+        try { Start-InstalledBot (Join-Path $env:ProgramData 'RustDropsBot\start-rust-bot.ps1') $Plan.Options.RunOnLogon }
+        catch { throw "$result`r`nStarting the installed bot failed: $($_.Exception.Message)" }
+    }
+    return $result
+}
+
+function Install-WindowsBotCore($Plan) {
     Assert-InstallAdministrator
     # Repeat discovery and all path checks immediately before any destructive action.
     $fresh = Get-InstallationPlan -Options $Plan.Options -Source $Plan.Source -KnownFolders $Plan.KnownFolders -DeepScan:$Plan.DeepScan
@@ -390,7 +417,9 @@ function Install-WindowsBot($Plan) {
         [IO.File]::WriteAllText((Join-Path $fresh.Destination '.rust-drops-install.json'),
             ([ordered]@{ Version = 1; Shortcuts = $shortcuts } | ConvertTo-Json))
         New-InstallShortcuts $fresh.Destination $launcher $shortcuts
-        if ($Plan.Options.StartNow) { Start-InstalledBot $launcher $Plan.Options.RunOnLogon }
+        Import-Module (Join-Path $PSScriptRoot 'WindowsUpdate.psm1') -Force
+        $autoUpdates = $Plan.Options.PSObject.Properties['AutoUpdates'] -and [bool]$Plan.Options.AutoUpdates
+        Set-UpdateSettings -Enabled $autoUpdates -Repository $fresh.Destination
         return "Installed to $($fresh.Destination).`r`nRun at user sign-in: $($Plan.Options.RunOnLogon).`r`nOld credentials/database backups (sensitive): $work`r`nThese backups are intentionally retained for recovery; remove them manually after verifying the new installation.`r`nA running process is not proof of Discord connectivity; check bot status and launcher logs."
     } catch {
         throw "Installation stopped: $($_.Exception.Message)`r`nRecovery/prepared files: $work`r`nSome prior steps may have completed. No automatic rollback is claimed. Backups may contain credentials; keep them private."

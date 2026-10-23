@@ -32,6 +32,8 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
         <CheckBox x:Name="RegisterCommands" Margin="0,0,0,8" IsChecked="True">Register Discord slash commands (updates the selected server)</CheckBox>
         <CheckBox x:Name="DesktopShortcut" Margin="0,0,0,8">Create a desktop shortcut to start the bot</CheckBox>
         <CheckBox x:Name="StartMenuShortcut" Margin="0,0,0,8">Create a Start menu shortcut to start the bot</CheckBox>
+        <CheckBox x:Name="AutoUpdates" Margin="0,0,0,8" IsChecked="False"
+                  ToolTip="Checks once when setup or the installed bot opens. Downloads stable releases from this project's GitHub repository. May delay startup; no periodic polling.">Automatically update setup and the bot on launch (opt in)</CheckBox>
         <CheckBox x:Name="AllowNodeInstall" Margin="0,0,0,16">Download/install Node.js LTS with Windows App Installer if missing or incompatible</CheckBox>
         <TextBlock TextWrapping="Wrap" Foreground="#555555">Requires administrator permissions and internet access. Node.js installation may show a Windows consent prompt. Old supported installations will be removed only after a separate confirmation. The running setup folder is preserved. Old data recovery copies are retained privately.</TextBlock>
       </StackPanel>
@@ -76,6 +78,7 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
             DesktopShortcut = [bool]$dialog.FindName('DesktopShortcut').IsChecked
             StartMenuShortcut = [bool]$dialog.FindName('StartMenuShortcut').IsChecked
             AllowNodeInstall = [bool]$dialog.FindName('AllowNodeInstall').IsChecked
+            AutoUpdates = [bool]$dialog.FindName('AutoUpdates').IsChecked
         }
         $dialog.DialogResult = $true
     }.GetNewClosure())

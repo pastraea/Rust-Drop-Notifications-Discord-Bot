@@ -238,6 +238,57 @@ a per-session mutex prevents duplicate starts. Starting successfully only verifi
 that the process/task stays running briefly, not that Discord connectivity is healthy.
 Check the bot's online state and use `/setchannel` and `/checkdrops` afterward.
 
+#### Optional launch-time automatic updates
+
+Automatic updates are **disabled by default**. The install/reinstall screen has
+an independent **Automatically update setup and the bot on launch** checkbox,
+shown again in the final confirmation. **More** also lets the current Windows
+user enable or disable the preference without reinstalling. A successful install
+saves that screen's selection. Turning it off affects subsequent launches; it
+does not interrupt an update already in progress.
+
+There is no polling timer, always-running updater, or additional Windows service.
+Each setup EXE launch and each installed-bot launch (including the sign-in task
+and bot shortcuts) invokes a separate, short-lived PowerShell updater process.
+The bot is started after that process finishes. An already-running bot is not
+stopped to check for updates; direct `npm start`/development runs bypass this
+installer-managed updater. The ordinary `npm run installer` source launcher does
+not self-update your development checkout.
+
+The updater checks the latest stable published release of this repository via
+GitHub's unauthenticated HTTPS API. It ignores drafts/prereleases and never
+downgrades. It requires the expected versioned EXE asset, its GitHub SHA-256
+digest, and matching package/lockfile versions. Missing assets/digests, network
+failures, rate limits, unknown folder contents, or a running/ambiguous bot process
+refuse the update rather than guessing. There is no Node.js, Windows, or
+slash-command-registration upgrade performed by the updater.
+
+For setup, a verified newer EXE is cached privately and opened automatically.
+The original EXE you downloaded remains a bootstrap: it can reopen the cached
+latest version on future launches rather than overwriting itself. For the bot,
+the updater extracts the verified payload, installs locked dependencies, builds,
+and validates configuration before replacing the managed installation at the
+same path. It preserves `.env`, the `data` directory (including database
+sidecars), and shortcut ownership metadata. Automatic bot updates require the
+installer-managed `data\bot.db` path. They can install any newer stable version,
+including a major release, so enable this only if you accept unattended changes.
+
+The previous installation is retained privately in a uniquely named
+`.rust-drops-update-<id>\previous` folder beside the installation. Staging failures
+leave the old bot untouched; activation failures attempt immediate restoration.
+If restoration fails, startup is blocked and recovery must be performed manually.
+A successfully activated release starts through the normal launcher; process
+startup is not proof of Discord readiness, and there is no automatic rollback
+after runtime/database migrations. Verify the bot and retain recovery backups.
+
+Per-user preferences, cached setup EXEs, and a bounded updater log are stored in
+`%LOCALAPPDATA%\RustDropsBot-Updater`. Checks/downloads do not upload configuration,
+tokens, or database contents. HTTPS plus the release digest protects transport
+and download integrity, not a compromised repository/account: these executables
+are still unsigned. Installation/removal/update mutations share a lock; uninstall
+disables the matching installation's updater preference. Logs, caches, and private
+recovery backups are intentionally retained for diagnosis/recovery.
+
 Run the isolated safety tests with `npm run test:installer`. They mock OS task and
 process operations and use temporary fixture folders; they do not uninstall a real bot,
 download Node.js, or contact Discord. When local dependencies are available, a real

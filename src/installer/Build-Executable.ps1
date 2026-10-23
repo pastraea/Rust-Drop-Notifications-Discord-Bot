@@ -19,7 +19,8 @@ try {
     $payload = Join-Path $temporary 'payload.zip'
     $files = @('package.json', 'package-lock.json', 'tsconfig.json', 'LICENSE', 'README.md', '.env.example')
     $files += @('Start-Installer.ps1', 'InstallScreen.ps1', 'WindowsInstall.psm1', 'WindowsUninstall.psm1',
-        'WindowsDiscovery.psm1', 'backupDatabase.cjs', 'validateConfiguration.cjs') | ForEach-Object { 'src\installer\' + $_ }
+        'WindowsDiscovery.psm1', 'WindowsUpdate.psm1', 'Invoke-Updater.ps1',
+        'backupDatabase.cjs', 'validateConfiguration.cjs') | ForEach-Object { 'src\installer\' + $_ }
     $source = Join-Path $root 'src'
     Assert-PlainPath $source
     foreach ($item in @(Get-ChildItem -LiteralPath $source -Recurse -Force)) {

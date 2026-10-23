@@ -6,6 +6,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Import-Module (Join-Path $PSScriptRoot 'WindowsUninstall.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'WindowsDiscovery.psm1') -Force
 . (Join-Path $PSScriptRoot 'InstallScreen.ps1')
+Import-Module (Join-Path $PSScriptRoot 'WindowsUpdate.psm1') -Force
 $protectedRepository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $script:scan = $null
 $script:worker = $null
@@ -34,6 +35,8 @@ $script:openedEnvironmentCopies = @{}
     <Expander x:Name="More" Grid.Row="2" Header="More" IsExpanded="False">
       <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="0,10,0,0">
+        <CheckBox x:Name="AutoUpdates" Margin="0,0,0,12" IsChecked="False"
+                  ToolTip="Checks once on setup EXE or installed-bot launch; no periodic polling.">Automatically update setup and the installed bot on launch</CheckBox>
         <TextBlock x:Name="Status" Margin="0,0,0,10" TextWrapping="Wrap">Ready. Check installation to search this computer.</TextBlock>
         <ComboBox x:Name="Installations" Margin="0,0,0,12" Visibility="Collapsed"/>
         <TextBox x:Name="Report" Height="180" Margin="0,0,0,12" IsReadOnly="True" TextWrapping="Wrap" BorderBrush="#DDDDDD"
@@ -53,9 +56,23 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 $reader.Close()
 $controls = @{}
-foreach ($name in @('Check', 'Install', 'Uninstall', 'More', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse')) {
+foreach ($name in @('Check', 'Install', 'Uninstall', 'More', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse', 'AutoUpdates')) {
     $controls[$name] = $window.FindName($name)
 }
+try { $controls.AutoUpdates.IsChecked = (Get-UpdateSettings).Enabled }
+catch { $controls.Report.Text = "Updater settings could not be read: $($_.Exception.Message)" }
+$controls.AutoUpdates.Add_Click({
+    try {
+        $settings = Get-UpdateSettings
+        Set-UpdateSettings -Enabled ([bool]$controls.AutoUpdates.IsChecked) -Repository $settings.Repository
+        $controls.Status.Text = 'Automatic update preference saved. It takes effect on the next launch.'
+    } catch {
+        $controls.AutoUpdates.IsChecked = $false
+        $controls.Report.Text = "Automatic update preference was not saved: $($_.Exception.Message)"
+        [void][Windows.MessageBox]::Show($window, 'The update preference could not be saved. Review the report under More.',
+            'Update preference', 'OK', 'Warning')
+    }
+})
 
 function Set-Busy([bool]$Busy) {
     $controls.Check.IsEnabled = -not $Busy -or $script:operation -eq 'scan'
@@ -64,6 +81,7 @@ function Set-Busy([bool]$Busy) {
     $controls.Browse.IsEnabled = -not $Busy
     $controls.DeepScan.IsEnabled = -not $Busy
     $controls.OpenEnvironment.IsEnabled = -not $Busy
+    $controls.AutoUpdates.IsEnabled = -not $Busy
     $controls.Installations.IsEnabled = -not $Busy
     $controls.Install.IsEnabled = -not $Busy
     $controls.Uninstall.IsEnabled = -not $Busy
@@ -197,6 +215,7 @@ $timer.Add_Tick({
             $controls.Report.Text = $output -join "`r`n"
             $controls.Installations.Items.Clear()
             $script:scan = $null
+            $controls.AutoUpdates.IsChecked = (Get-UpdateSettings).Enabled
         } else {
             $controls.Status.Text = 'Removal finished. Check installation again to review remaining items.'
             $controls.Report.Text = $output -join "`r`n"
@@ -258,6 +277,7 @@ function Confirm-InstallPlan($Plan) {
     else { $details += "`r`n" + ($paths -join "`r`n") }
     $details += "`r`n`r`nThe running setup folder is preserved. Private recovery copies of old credentials/databases will be kept."
     $details += "`r`nRun at sign-in: $($Plan.Options.RunOnLogon); start now: $($Plan.Options.StartNow)."
+    $details += "`r`nAutomatic launch-time updates (setup and bot): $($Plan.Options.AutoUpdates)."
     if ($Plan.Options.RegisterCommands) { $details += "`r`nDiscord slash commands will be updated for the selected server." }
     if ($Plan.Options.AllowNodeInstall) { $details += "`r`nNode.js LTS may be downloaded/installed if required." }
     if ($Plan.ScanIssues.Count -gt 0) { $details += "`r`n`r`nFolder scan warnings (not all locations were readable):`r`n" + ($Plan.ScanIssues -join "`r`n") }

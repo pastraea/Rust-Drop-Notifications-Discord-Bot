@@ -8,6 +8,28 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.3.0] - 2026-10-23
+
+### Added
+
+- Opt-in, launch-time automatic updates for the setup EXE and installer-managed bot, using the repository's latest stable GitHub release.
+- Separate one-shot updater process with no periodic polling, additional startup task, or permanent Windows service.
+- Independent installer checkbox and a More preference control, disabled by default, with the installation choice shown in final confirmation.
+- Expected release-asset URL, size, and GitHub SHA-256 verification; stable-version comparison, private setup cache, and bounded download/API timeouts.
+- Staged bot builds/configuration validation, preserved local configuration/database/shortcut ownership, private previous-installation backups, and restoration on activation failure.
+- Shared install/removal/update maintenance locking, explicit update diagnostics, and matching-installation update disabling during uninstall.
+- Isolated update tests and operational, architecture, privacy, and testing documentation.
+
+### Changed
+
+- Positioned the automatic-update preference first in More, above all diagnostic and advanced controls.
+
+### Upgrade Notes
+
+- Updates run only on subsequent setup EXE or installed-bot launches after opt-in, not while the bot stays running. Direct npm/development launches bypass updating.
+- Executables remain unsigned. Updates trust the repository's release assets and digest over HTTPS, not a verified publisher signature.
+- No automatic shared Node.js upgrade, Discord command deployment, or runtime/database-readiness rollback is performed. Previous-installation backups are retained for manual recovery.
+
 ## [0.2.3] - 2026-10-23
 
 ### Added
