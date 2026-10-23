@@ -1,10 +1,13 @@
 {
     "name": "rust-drops-reminder-bot",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "private": true,
     "description": "Discord reminder bot for Twitch and Kick Rust drops",
     "author": "Thomas Benton",
     "license": "MIT",
+    "engines": {
+        "node": ">=22.12.0"
+    },
     "main": "dist/index.js",
     "scripts": {
         "build:installer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File src\\installer\\Build-Executable.ps1",
@@ -21,13 +24,13 @@
     "dependencies": {
         "better-sqlite3": "^13.0.3",
         "discord.js": "^14.26.4",
-        "dotenv": "^18.0.7",
+        "dotenv": "^18.0.8",
         "ffmpeg-static": "^5.3.0",
         "gifwrap": "^0.10.1",
-        "zod": "^4.6.6"
+        "zod": "^4.6.7"
     },
     "devDependencies": {
-        "@types/better-sqlite3": "^7.6.13",
+        "@types/better-sqlite3": "^9.6.0",
         "@types/node": "^26.6.5",
         "c8": "^12.0.0",
         "tsx": "^4.23.15",

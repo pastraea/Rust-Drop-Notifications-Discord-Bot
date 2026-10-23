@@ -62,7 +62,7 @@ Rust directory results or stream titles.
 
 Prerequisites:
 
-- Node.js 20+
+- Node.js 22.12+ (Node.js 22 and 24 are tested in CI)
 - npm 10+
 
 Setup:

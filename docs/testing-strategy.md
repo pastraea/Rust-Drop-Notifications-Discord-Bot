@@ -81,6 +81,10 @@ Covered areas:
 
 ## Test Commands
 
+Bot build, tests, and coverage require Node.js 22.12+ and npm 10+.
+CI runs the build and tests on Node.js 22 and 24, with coverage on Node.js 22.
+Node.js 20 is not supported by the existing `better-sqlite3` 13 dependency.
+
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:installer` (Windows only; also runs in the separate Windows CI job)

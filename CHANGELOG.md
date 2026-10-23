@@ -8,6 +8,19 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.3.1] - 2026-10-23
+
+### Changed
+
+- Updated `zod` from 4.6.6 to 4.6.7, `dotenv` from 18.0.7 to 18.0.8, and `@types/better-sqlite3` from 7.6.13 to 9.6.0.
+- Aligned the package and documented Node.js minimum with the Windows installer's existing Node.js 22.12+ requirement.
+- Updated CI to test Node.js 22 and 24 instead of Node.js 20 and 22.
+
+### Upgrade Notes
+
+- Use Node.js 22.12 or newer. Node.js 20 is not supported by the existing `better-sqlite3` 13 dependency and fails the SQLite integration tests.
+- No Discord command, configuration, database-schema, or automatic-update preference changes are included.
+
 ## [0.3.0] - 2026-10-23
 
 ### Added
