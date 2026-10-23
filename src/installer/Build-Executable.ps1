@@ -45,12 +45,20 @@ try {
         $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
     }
     if (-not (Test-Path -LiteralPath $compiler)) { throw 'The Windows .NET Framework C# compiler is unavailable.' }
+    $versionSource = Join-Path $temporary 'Version.cs'
+    [IO.File]::WriteAllText($versionSource, @"
+using System.Reflection;
+[assembly: AssemblyVersion("$version.0")]
+[assembly: AssemblyFileVersion("$version.0")]
+[assembly: AssemblyInformationalVersion("$version")]
+"@)
     & $compiler /nologo /target:winexe /platform:anycpu /optimize+ `
         /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll `
-        "/resource:$payload,BotPayload" "/out:$executable" (Join-Path $PSScriptRoot 'SetupLauncher.cs')
+        "/resource:$payload,BotPayload" "/out:$executable" (Join-Path $PSScriptRoot 'SetupLauncher.cs') $versionSource
     if ($LASTEXITCODE -ne 0) { throw 'Setup executable compilation failed.' }
     Write-Output $executable
 } finally {
     if (Test-Path -LiteralPath (Join-Path $temporary 'payload.zip')) { Remove-Item -LiteralPath (Join-Path $temporary 'payload.zip') }
+    if (Test-Path -LiteralPath (Join-Path $temporary 'Version.cs')) { Remove-Item -LiteralPath (Join-Path $temporary 'Version.cs') }
     Remove-Item -LiteralPath $temporary
 }

@@ -10,6 +10,7 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Rust Drop Notifications Discord Bot Setup")]
 [assembly: AssemblyProduct("Rust Drop Notifications Discord Bot")]
+[assembly: AssemblyCompany("studio bijou")]
 
 internal static class SetupLauncher
 {

@@ -13,6 +13,10 @@ function Assert-Package([bool]$Condition, [string]$Message) {
     $script:passed++
 }
 try {
+    $metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($executable)
+    $version = (Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
+    Assert-Package ($metadata.CompanyName -ceq 'studio bijou') 'Executable company metadata is incorrect.'
+    Assert-Package ($metadata.FileVersion -eq "$version.0" -and $metadata.ProductVersion -eq $version) 'Executable version metadata must match the package.'
     $names = @($archive.Entries | ForEach-Object { $_.FullName.Replace('/', '\') })
     foreach ($required in @('package.json', 'package-lock.json', '.env.example', 'src\index.ts',
         'src\installer\Start-Installer.ps1', 'src\installer\WindowsInstall.psm1', 'src\installer\WindowsUninstall.psm1')) {

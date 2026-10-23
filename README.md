@@ -88,6 +88,11 @@ Setup:
 
 ### Windows setup window
 
+The executable's company metadata is **studio bijou**, with file/product versions
+matching the package release. It remains unsigned: this metadata does not establish
+a Windows verified publisher, and unknown-publisher or SmartScreen warnings may
+appear. The repository's MIT licence and existing copyright attribution are unchanged.
+
 #### Standalone executable
 
 The standalone `Rust-Drop-Notifications-Discord-Bot-Setup-<version>.exe` opens the

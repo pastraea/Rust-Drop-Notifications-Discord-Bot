@@ -8,6 +8,19 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.2.3] - 2026-10-23
+
+### Added
+
+- Windows executable company metadata identifying studio bijou.
+- Executable assembly/file/product versions generated from the package version, with regression checks for company and version metadata.
+
+### Installation Notes
+
+- The setup EXE remains unsigned. Company metadata is not a verified publisher identity or digital signature; Windows may display unknown-publisher or SmartScreen warnings.
+- The repository's MIT licence and existing copyright attribution are unchanged.
+- No bot runtime, dependency, or database-schema changes are included.
+
 ## [0.2.2] - 2026-10-18
 
 ### Changed
