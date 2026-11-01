@@ -6,6 +6,7 @@ Thanks for contributing.
 
 - Create feature branches from `main`.
 - Use short, descriptive branch names, for example `feat/alerts-status-copy` or `fix/twitch-parser-timeout`.
+- Release preparation uses `release/<version>` branches (for example `release/0.4.0`); see [VERSIONING.md](VERSIONING.md).
 - Keep pull requests focused on one concern.
 
 ## Commit Style
@@ -19,10 +20,13 @@ Thanks for contributing.
 
 ## Development Workflow
 
-1. Install dependencies with `npm install`.
-2. Validate build with `npm run build`.
-3. Run tests with `npm test`.
-4. When changing behavior, add or update tests.
+1. Use Node.js 22.12 or newer and npm 10+.
+2. Install dependencies with `npm ci` (or `npm install` when changing dependencies).
+3. Validate build with `npm run build`.
+4. Run tests with `npm test`.
+5. If you change the Windows installer, updater, or setup UI, also run `npm run test:installer` and `npm run test:updater` on Windows. They mock OS operations and use temporary folders.
+6. When changing behavior, add or update tests.
+7. Never commit `.env`, tokens, or database files, and never paste them into issues or pull requests.
 
 ## Pull Request Expectations
 

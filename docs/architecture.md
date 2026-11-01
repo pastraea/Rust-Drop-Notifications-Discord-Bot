@@ -7,6 +7,8 @@ Track Rust drops from multiple providers, store campaign/user state, and send ti
 ## Components
 
 - Entry point: `src/index.ts`
+- Configuration: `src/config.ts` (strict, side-effect-free validation used by the bot, command deployment, and installer checks)
+- Graceful shutdown: `src/shutdown.ts`
 - Scheduler: `src/scheduler.ts`
 - Providers: `src/providers/twitch.ts`, `src/providers/kick.ts`
 - Sync service: `src/services/dropService.ts`
@@ -33,9 +35,19 @@ Activation failure restores the old tree; failed restoration blocks startup.
 Installer/removal/update mutations share a maintenance mutex. User credentials
 are never sent to GitHub, and updater checks do not use Discord credentials.
 
+## Configuration Preservation
+
+The installer treats `.env` as user-owned data. With **Preserve my existing .env**
+on (the default), reinstalls copy the file byte-for-byte and the updater carries it
+forward unchanged; the only permitted modification is appending commented-out lines
+for options added by a newer release. Setup never re-parses or rewrites it. Turning
+the option off is the single path that deletes an old `.env`, and it requires a
+separate confirmation naming each file. The preference is stored with the update
+settings (see Windows Update Lifecycle) and defaults to on when absent or unreadable.
+
 ## Runtime Flow
 
-1. Boot config and open SQLite database.
+1. Validate configuration (exit with a secret-safe message on invalid values), then open the SQLite database.
 2. Start Discord client.
 3. On scheduler cycle:
    - fetch normalized drops from providers
@@ -45,6 +57,8 @@ are never sent to GitHub, and updater checks do not use Discord credentials.
    - parse command
    - update per-user or global settings in DB
    - reply ephemerally or post channel update
+5. On `SIGINT`/`SIGTERM` or a fatal error: stop scheduling, wait for a running cycle,
+   destroy the Discord client, close the database (forced exit after 15 seconds).
 
 ## Design Decisions and Tradeoffs
 

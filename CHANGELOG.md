@@ -6,12 +6,17 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [0.4.0] - 2026-11-01
+
 ### Added
 
 - **Preserve my existing .env** option (on by default) in the Install/Reinstall screen and under **More**. An existing `.env` is carried into reinstalls and updates byte-for-byte, so comments, ordering, quoting, and custom settings are never lost. New options from a release are appended only as commented-out lines.
 - Explicit opt-out: with Preserve off, Install/Reinstall creates a new `.env` and deletes the old one with no recovery copy, after a separate confirmation that lists every file to be deleted.
 - Graceful shutdown on `SIGINT`/`SIGTERM`, `unhandledRejection` and `uncaughtException`: the scheduler stops and finishes its running cycle, then the Discord client and database close (forced exit after 15 seconds).
 - Tests for configuration validation, shutdown, and scheduler behavior.
+- Release process documented in `VERSIONING.md`; contributor, pull request, and security docs updated to match current tooling (Node.js 22.12+, installer test commands, supported versions).
 
 ### Changed
 

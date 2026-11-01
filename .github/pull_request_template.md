@@ -15,11 +15,17 @@ Describe the change and why it is needed.
 - [ ] `npm run build`
 - [ ] `npm test`
 - [ ] `npm run test:coverage` (when behavior changed)
+- [ ] `npm run test:installer` and `npm run test:updater` (when installer, updater, or setup UI changed; Windows only)
 
 ## Breaking changes
 
 - [ ] No
-- [ ] Yes (describe below)
+- [ ] Yes (describe below, including any `.env` or database impact)
+
+## Security and data
+
+- [ ] No secrets, `.env` contents, or database files are included
+- [ ] User configuration (`.env`) is never deleted or rewritten except where explicitly documented
 
 ## Documentation
 

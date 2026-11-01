@@ -9,12 +9,15 @@ Discord bot that tracks Rust drops from Twitch and Kick providers, persists stat
 - SQLite persistence for user preferences, campaign state, and notification dedupe
 - Mock and live provider modes for local testing and production operation
 - Official Facepunch Twitch participation lists, with general and streamer-specific drops shown separately
+- Strict startup configuration validation with clear, secret-safe error messages
+- Graceful shutdown that lets a running drop cycle finish and closes the database cleanly
+- Windows setup EXE with opt-in launch-time updates and a default-on **Preserve my existing .env** option, so reinstalls and updates never discard your configuration
 
 ## Architecture Overview
 
 High-level flow:
 
-1. `src/index.ts` starts the Discord client and initializes dependencies.
+1. `src/index.ts` validates configuration (`src/config.ts`), starts the Discord client, and initializes dependencies. `src/shutdown.ts` provides ordered graceful shutdown.
 2. `src/scheduler.ts` runs recurring cycles (`syncDrops` then reminder dispatch).
 3. Providers in `src/providers/*.ts` fetch and normalize campaign data.
 4. `src/services/dropService.ts` merges provider output and updates DB state.
@@ -343,6 +346,8 @@ Common issues and fixes:
 1. Bot does not come online.
    - Verify `DISCORD_TOKEN` is set and valid.
    - Check startup logs from `src/index.ts` for login errors.
+   - A message starting `invalid environment configuration` names the setting and rule
+     that failed (for example `CHECK_INTERVAL_MS`); fix that value in `.env`.
 
 2. Commands do not appear.
    - Re-run `npm run deploy-commands` with correct `DISCORD_CLIENT_ID` and `DISCORD_GUILD_ID`.
@@ -375,11 +380,17 @@ For operations-level response steps, see [docs/runbook.md](docs/runbook.md).
 
 Current commands:
 
+- `npm run build` to type-check and compile
 - `npm test` for unit tests
 - `npm run test:coverage` for coverage report output
+- `npm run test:installer` and `npm run test:updater` for the Windows installer, uninstaller,
+  and updater safeguards (Windows only; OS operations are mocked)
 
-Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1)
-and Twitch campaign parsing in [src/providers/twitch.test.ts](src/providers/twitch.test.ts).
+Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1),
+Twitch campaign parsing in [src/providers/twitch.test.ts](src/providers/twitch.test.ts),
+environment validation in [src/config.test.ts](src/config.test.ts), shutdown ordering in
+[src/shutdown.test.ts](src/shutdown.test.ts), and scheduler overlap/stop/failure handling in
+[src/scheduler.test.ts](src/scheduler.test.ts).
 The [drop flow tests](src/services/dropFlow.test.ts) exercise official campaign HTML
 through real SQLite persistence and a mocked Discord send, including schema migration,
 manual snapshots, live alert dedupe, and failed-sync preservation.
