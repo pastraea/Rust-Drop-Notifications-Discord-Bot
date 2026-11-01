@@ -185,6 +185,7 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
         $script:activeBot = $false
         $script:failActivation = $false
         $script:failRestoration = $false
+        $script:fixtureExample = "DISCORD_TOKEN=`nNEW_OPTION=7`n"
         function script:Get-CimInstance {
             param($ClassName)
             if ($script:activeBot) {
@@ -194,6 +195,7 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
         function script:Expand-UpdatePayload {
             param($Executable, $Destination, $Version)
             '{"name":"rust-drops-reminder-bot","version":"0.10.0"}' | Set-Content -LiteralPath (Join-Path $Destination 'package.json')
+            [IO.File]::WriteAllText((Join-Path $Destination '.env.example'), $script:fixtureExample)
         }
         function script:Move-UpdateDirectory {
             param($Source, $Destination)
@@ -242,6 +244,30 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
         Assert-Update ((Get-Content -LiteralPath (Join-Path $repository "data\$name") -Raw).Trim() -eq "retained-$name") "Update lost $name."
     }
     Assert-Update (Test-Path -LiteralPath (Join-Path $work 'previous\.env')) 'Previous installation backup was not retained.'
+    $updatedEnvironment = [IO.File]::ReadAllText((Join-Path $repository '.env'))
+    Assert-Update ($updatedEnvironment.StartsWith('DISCORD_TOKEN=fixture-only-token') -and $updatedEnvironment -match '(?m)^# NEW_OPTION=7' -and $updatedEnvironment -notmatch '(?m)^# DISCORD_TOKEN') 'Update must keep .env and only append new options as comments.'
+
+    # With Preserve .env off the update still carries the file forward, but does not touch or migrate it.
+    $beforeBytes = [IO.File]::ReadAllBytes((Join-Path $repository '.env'))
+    & $module { $script:fixtureExample = "DISCORD_TOKEN=`nNEW_OPTION=7`nSECOND_OPTION=1`n" }
+    Set-UpdateSettings -Enabled $false -Repository $repository -PreserveEnvironment $false
+    Assert-Update (-not (Get-UpdateSettings).PreserveEnvironment) 'Preserve preference was not saved as off.'
+    Set-UpdateSettings -Enabled $true -Repository $repository
+    Assert-Update (-not (Get-UpdateSettings).PreserveEnvironment) 'Changing auto-update reset the Preserve preference.'
+    $work = Join-Path $temporary 'preserve-off'
+    New-Item -ItemType Directory -Path $work | Out-Null
+    Update-InstalledBot $repository $work $candidate $fixtureDownload
+    Assert-Update ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $repository '.env'))) -ceq [Convert]::ToBase64String($beforeBytes)) 'Preserve-off update modified .env.'
+    Set-UpdateSettings -Enabled $true -Repository $repository -PreserveEnvironment $true
+    $work = Join-Path $temporary 'preserve-on'
+    New-Item -ItemType Directory -Path $work | Out-Null
+    Update-InstalledBot $repository $work $candidate $fixtureDownload
+    $migrated = [IO.File]::ReadAllText((Join-Path $repository '.env'))
+    Assert-Update ($migrated -match '(?m)^# SECOND_OPTION=1' -and ([regex]::Matches($migrated, 'NEW_OPTION')).Count -eq 1) 'Preserve-on update did not add only the missing option.'
+    '{"Enabled":true,"Repository":"x"}' | Set-Content -LiteralPath $settingsPath
+    Assert-Update ((Get-UpdateSettings).PreserveEnvironment) 'Settings from before this option existed must default to preserving .env.'
+    '{"Enabled":true,"Repository":"x","PreserveEnvironment":"no"}' | Set-Content -LiteralPath $settingsPath
+    Assert-UpdateFailure { Get-UpdateSettings } 'invalid'
     Assert-Update ((Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'RustDropsBot-Updater\updater.log') -Raw) -notmatch 'fixture-only-token') 'Updater logged credentials.'
     Write-Output "Passed $passed updater assertions. GitHub, downloads, Node/build and process calls were mocked; only temporary files changed."
 } finally {

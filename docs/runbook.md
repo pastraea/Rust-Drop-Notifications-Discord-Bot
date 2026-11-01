@@ -122,14 +122,18 @@ is performed by the launcher.
 
 Run the setup window as administrator using the intended bot account. Select
 **Install / Reinstall**. Fill in the
-destination and masked credentials, or opt into reusing a scanned configuration.
+destination and masked credentials, or leave **Preserve my existing .env exactly**
+checked (the default) to keep the selected installation's configuration untouched.
 Select startup, start-now, registration, and shortcut settings independently.
 **Cancel** dismisses the options without changes. **Install** rescans and requests
-explicit confirmation of the removal list before any installation changes.
+explicit confirmation of the removal list before any installation changes. If
+Preserve is off and an old `.env` would be deleted, a second confirmation names each
+file and warns that no backup is kept.
 
 Staging/build and optional Discord command registration precede destructive
 cleanup. Registration changes the selected server even if a later step fails.
-Old credential/database recovery copies are retained under the private
+Old database recovery copies (and, with Preserve on, a recovery copy of the old
+`.env`) are retained under the private
 `%LOCALAPPDATA%\RustDropsBot-Setup` directory; error/success output identifies the
 specific location. Preserve it until recovery or verification is complete.
 Never upload its contents. Failed installs may be partial: inspect the reported

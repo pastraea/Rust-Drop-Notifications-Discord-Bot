@@ -2,8 +2,10 @@
 
 ## Current Coverage
 
-Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`
-and Twitch campaign parsing in `src/providers/twitch.test.ts`.
+Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`,
+Twitch campaign parsing in `src/providers/twitch.test.ts`, environment validation in
+`src/config.test.ts`, graceful shutdown ordering in `src/shutdown.test.ts`, and scheduler
+overlap/stop/failure behavior in `src/scheduler.test.ts`.
 `src/services/dropFlow.test.ts` exercises provider HTML through real SQLite and mocked
 Discord sends, without logging into Discord or making live network requests.
 
@@ -34,10 +36,16 @@ Covered areas:
 - Collapsed-by-default More section containing all diagnostics/advanced controls,
   compact layout sizing, expansion/collapse resizing, and scan-result preservation
   without automatically expanding diagnostics on completion or cancellation
-- Install/reinstall screen controls, masked credentials, independent settings and cancel.
-- Staged installation before cleanup, database/config reuse, private recovery ACLs,
+- Install/reinstall screen controls, masked credentials, independent settings and cancel,
+  and the default-on Preserve .env checkbox that locks credential fields.
+- Staged installation before cleanup, database reuse, private recovery ACLs,
   changed-scan rejection, fresh-install isolation from bundled secrets, command-output
   redaction, opt-in Node.js provisioning, and limited current-user logon task settings.
+  Preserved `.env` files (with comments, quotes, `$`, duplicate keys, CRLF, no trailing
+  newline) are checked for byte-for-byte equality; guards for entered credentials,
+  custom `DATABASE_PATH`, missing command-registration IDs, and edits between
+  confirmation and install; the opt-out path lists and skips the `.env` backup; and
+  appended options are tested for idempotence, CRLF and BOM handling.
   `src/installer/Test-WindowsInstall.ps1` is invoked by the main installer test script.
   A temporary live-WAL SQLite backup is tested when Node.js/dependencies are present.
 - Standalone EXE compilation using the Windows .NET Framework compiler, embedded

@@ -200,11 +200,13 @@ function Invoke-BotMaintenance {
 function Remove-BotInstallation {
     param(
         [Parameter(Mandatory)]$Plan, [bool]$DeleteData, [bool]$DeleteFolder,
-        [string]$BackupDataDirectory, [Parameter(Mandatory)][string]$ProtectedRepository
+        [string]$BackupDataDirectory, [Parameter(Mandatory)][string]$ProtectedRepository,
+        [switch]$SkipEnvironmentBackup
     )
     Invoke-BotMaintenance {
         Remove-BotInstallationCore -Plan $Plan -DeleteData $DeleteData -DeleteFolder $DeleteFolder `
-            -BackupDataDirectory $BackupDataDirectory -ProtectedRepository $ProtectedRepository
+            -BackupDataDirectory $BackupDataDirectory -ProtectedRepository $ProtectedRepository `
+            -SkipEnvironmentBackup:$SkipEnvironmentBackup
     }
 }
 
@@ -214,7 +216,8 @@ function Remove-BotInstallationCore {
         [bool]$DeleteData,
         [bool]$DeleteFolder,
         [string]$BackupDataDirectory,
-        [Parameter(Mandatory)][string]$ProtectedRepository
+        [Parameter(Mandatory)][string]$ProtectedRepository,
+        [switch]$SkipEnvironmentBackup
     )
     if ($DeleteFolder -and -not $DeleteData) { throw "Deleting the installation folder also requires consent to delete data." }
     if (-not $Plan.Found -or -not $Plan.Repository) { throw "No recognized installation was selected." }
@@ -278,6 +281,8 @@ function Remove-BotInstallationCore {
         New-Item -ItemType Directory -Path $BackupDataDirectory | Out-Null
         $names = @('.env', 'bot.db', 'bot.db-wal', 'bot.db-shm')
         for ($index = 0; $index -lt $fresh.DataPaths.Count; $index++) {
+            # Index 0 is the .env file; the user may choose to leave no recovery copy of credentials.
+            if ($index -eq 0 -and $SkipEnvironmentBackup) { continue }
             $file = $fresh.DataPaths[$index]
             Assert-PlainPath $file
             if (Test-Path -LiteralPath $file -PathType Leaf) {

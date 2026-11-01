@@ -16,12 +16,17 @@ No passwords or OAuth refresh tokens are persisted by the app.
 
 - Primary datastore is the SQLite file at `DATABASE_PATH`.
 - Default path: `./data/bot.db`.
-- Optional Windows update preferences (enabled flag and installation path), cached
+- Optional Windows update preferences (automatic-update flag, installation path, and
+  the Preserve .env flag), cached
   setup executables, and a bounded diagnostic log are stored under the current
-  user's `%LOCALAPPDATA%\RustDropsBot-Updater`. Preferences default to disabled.
+  user's `%LOCALAPPDATA%\RustDropsBot-Updater`. Automatic updates default to disabled;
+  Preserve .env defaults to on. No credentials are stored in these preferences.
 - Update staging and previous-installation backups are private sibling
   `.rust-drops-update-<id>` folders. They may contain `.env`, the database, and
   database sidecars and are intentionally retained until manually reviewed.
+- Reinstalling with Preserve .env off deletes the old `.env` without keeping a
+  recovery copy; with it on, a private recovery copy remains under
+  `%LOCALAPPDATA%\RustDropsBot-Setup` until you remove it.
 
 ## Retention
 

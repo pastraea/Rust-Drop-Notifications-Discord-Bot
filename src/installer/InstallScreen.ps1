@@ -19,7 +19,9 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
         </DockPanel>
         <TextBlock Margin="0,0,0,6">Existing installation to reuse (optional)</TextBlock>
         <ComboBox x:Name="ReuseFolder" Margin="0,0,0,8"/>
-        <CheckBox x:Name="ReuseConfiguration" Margin="0,0,0,8">Reuse selected installation's configuration (blank fields below keep old values)</CheckBox>
+        <CheckBox x:Name="PreserveEnvironment" Margin="0,0,0,8" IsChecked="True"
+                  ToolTip="Keeps the selected installation's .env exactly as it is, byte for byte, and only appends new options as commented-out lines. Turn off to delete the old .env with NO backup and create a new one from the fields below.">Preserve my existing .env exactly (recommended)</CheckBox>
+        <TextBlock x:Name="PreserveNote" Margin="22,0,0,8" TextWrapping="Wrap" Foreground="#555555"/>
         <CheckBox x:Name="ReuseDatabase" Margin="0,0,0,16">Reuse selected installation's database and preferences</CheckBox>
         <TextBlock Margin="0,0,0,6">Bot token (secret)</TextBlock>
         <PasswordBox x:Name="Token" Padding="5" Margin="0,0,0,10"/>
@@ -35,7 +37,7 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
         <CheckBox x:Name="AutoUpdates" Margin="0,0,0,8" IsChecked="False"
                   ToolTip="Checks once when setup or the installed bot opens. Downloads stable releases from this project's GitHub repository. May delay startup; no periodic polling.">Automatically update setup and the bot on launch (opt in)</CheckBox>
         <CheckBox x:Name="AllowNodeInstall" Margin="0,0,0,16">Download/install Node.js LTS with Windows App Installer if missing or incompatible</CheckBox>
-        <TextBlock TextWrapping="Wrap" Foreground="#555555">Requires administrator permissions and internet access. Node.js installation may show a Windows consent prompt. Old supported installations will be removed only after a separate confirmation. The running setup folder is preserved. Old data recovery copies are retained privately.</TextBlock>
+        <TextBlock TextWrapping="Wrap" Foreground="#555555">Requires administrator permissions and internet access. Node.js installation may show a Windows consent prompt. Old supported installations will be removed only after a separate confirmation. The running setup folder is preserved. Old database recovery copies are retained privately; the old .env is kept or deleted according to the Preserve setting above.</TextBlock>
       </StackPanel>
     </ScrollViewer>
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
@@ -51,10 +53,27 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
     $dialog.FindName('Destination').Text = Join-Path $env:LOCALAPPDATA 'RustDropsBot'
     foreach ($folder in $Folders) { [void]$dialog.FindName('ReuseFolder').Items.Add($folder) }
     if ($Folders.Count -gt 0) { $dialog.FindName('ReuseFolder').SelectedIndex = 0 }
-    else {
-        $dialog.FindName('ReuseConfiguration').IsEnabled = $false
-        $dialog.FindName('ReuseDatabase').IsEnabled = $false
-    }
+    else { $dialog.FindName('ReuseDatabase').IsEnabled = $false }
+    # The saved preference is the default; a missing or unreadable setting keeps the safe choice (preserve).
+    $preserveDefault = $true
+    try { $preserveDefault = [bool](Get-UpdateSettings).PreserveEnvironment } catch { $preserveDefault = $true }
+    $dialog.FindName('PreserveEnvironment').IsChecked = $preserveDefault
+    # Entered credentials only apply to a newly created .env, so they are locked while an existing file is preserved.
+    $refreshPreserve = {
+        $selected = [string]$dialog.FindName('ReuseFolder').SelectedItem
+        $hasExisting = $false
+        if ($selected) { $hasExisting = Test-Path -LiteralPath (Join-Path $selected '.env') -PathType Leaf }
+        $preserve = [bool]$dialog.FindName('PreserveEnvironment').IsChecked
+        $locked = $preserve -and $hasExisting
+        foreach ($name in @('Token', 'ClientId', 'GuildId')) { $dialog.FindName($name).IsEnabled = -not $locked }
+        $note = $dialog.FindName('PreserveNote')
+        if ($locked) { $note.Text = 'The existing .env will be kept unchanged. New options are added as commented-out lines. The token and ID fields below are not used.' }
+        elseif (-not $preserve -and $hasExisting) { $note.Text = 'WARNING: the existing .env will be permanently deleted with no backup. Enter new credentials below.' }
+        else { $note.Text = 'No existing .env was found for the selected installation. A new one is created from the fields below.' }
+    }.GetNewClosure()
+    $dialog.FindName('PreserveEnvironment').Add_Click($refreshPreserve)
+    $dialog.FindName('ReuseFolder').Add_SelectionChanged($refreshPreserve)
+    & $refreshPreserve
     $dialog.FindName('BrowseDestination').Add_Click({
         $picker = New-Object System.Windows.Forms.FolderBrowserDialog
         try {
@@ -66,11 +85,11 @@ function New-InstallScreen([Windows.Window]$Owner, [string[]]$Folders) {
     $dialog.FindName('ConfirmInstall').Add_Click({
         $dialog.Tag = [pscustomobject]@{
             Destination = $dialog.FindName('Destination').Text.Trim()
-            Token = $dialog.FindName('Token').Password
-            ClientId = $dialog.FindName('ClientId').Text.Trim()
-            GuildId = $dialog.FindName('GuildId').Text.Trim()
+            Token = $(if ($dialog.FindName('Token').IsEnabled) { $dialog.FindName('Token').Password } else { '' })
+            ClientId = $(if ($dialog.FindName('ClientId').IsEnabled) { $dialog.FindName('ClientId').Text.Trim() } else { '' })
+            GuildId = $(if ($dialog.FindName('GuildId').IsEnabled) { $dialog.FindName('GuildId').Text.Trim() } else { '' })
             ReuseFolder = [string]$dialog.FindName('ReuseFolder').SelectedItem
-            ReuseConfiguration = [bool]$dialog.FindName('ReuseConfiguration').IsChecked
+            PreserveEnvironment = [bool]$dialog.FindName('PreserveEnvironment').IsChecked
             ReuseDatabase = [bool]$dialog.FindName('ReuseDatabase').IsChecked
             RunOnLogon = [bool]$dialog.FindName('RunOnLogon').IsChecked
             StartNow = [bool]$dialog.FindName('StartNow').IsChecked

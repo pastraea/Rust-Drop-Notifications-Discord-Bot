@@ -37,6 +37,8 @@ $script:openedEnvironmentCopies = @{}
       <StackPanel Margin="0,10,0,0">
         <CheckBox x:Name="AutoUpdates" Margin="0,0,0,12" IsChecked="False"
                   ToolTip="Checks once on setup EXE or installed-bot launch; no periodic polling.">Automatically update setup and the installed bot on launch</CheckBox>
+        <CheckBox x:Name="PreserveEnvironment" Margin="0,0,0,12" IsChecked="True"
+                  ToolTip="When on, Install/Reinstall and automatic updates keep your existing .env exactly as it is and only add new options as commented-out lines. Turning it off lets Install/Reinstall delete the old .env (with no backup) after a separate confirmation.">Preserve my existing .env during installs and updates (recommended)</CheckBox>
         <TextBlock x:Name="Status" Margin="0,0,0,10" TextWrapping="Wrap">Ready. Check installation to search this computer.</TextBlock>
         <ComboBox x:Name="Installations" Margin="0,0,0,12" Visibility="Collapsed"/>
         <TextBox x:Name="Report" Height="180" Margin="0,0,0,12" IsReadOnly="True" TextWrapping="Wrap" BorderBrush="#DDDDDD"
@@ -56,11 +58,29 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 $reader.Close()
 $controls = @{}
-foreach ($name in @('Check', 'Install', 'Uninstall', 'More', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse', 'AutoUpdates')) {
+foreach ($name in @('Check', 'Install', 'Uninstall', 'More', 'Status', 'Installations', 'Report', 'DeepScan', 'OpenEnvironment', 'Browse', 'AutoUpdates', 'PreserveEnvironment')) {
     $controls[$name] = $window.FindName($name)
 }
-try { $controls.AutoUpdates.IsChecked = (Get-UpdateSettings).Enabled }
+try {
+    $initialSettings = Get-UpdateSettings
+    $controls.AutoUpdates.IsChecked = $initialSettings.Enabled
+    $controls.PreserveEnvironment.IsChecked = $initialSettings.PreserveEnvironment
+}
 catch { $controls.Report.Text = "Updater settings could not be read: $($_.Exception.Message)" }
+$controls.PreserveEnvironment.Add_Click({
+    $wanted = [bool]$controls.PreserveEnvironment.IsChecked
+    try {
+        $settings = Get-UpdateSettings
+        Set-UpdateSettings -Enabled $settings.Enabled -Repository $settings.Repository -PreserveEnvironment $wanted
+        if ($wanted) { $controls.Status.Text = '.env preservation turned on. Existing configuration is kept during installs and updates.' }
+        else { $controls.Status.Text = '.env preservation turned off. Install/Reinstall can delete an old .env (with no backup) after a separate confirmation.' }
+    } catch {
+        $controls.PreserveEnvironment.IsChecked = $true
+        $controls.Report.Text = ".env preservation preference was not saved: $($_.Exception.Message)"
+        [void][Windows.MessageBox]::Show($window, 'The preference could not be saved, so .env preservation stays on. Review the report under More.',
+            'Preserve .env', 'OK', 'Warning')
+    }
+})
 $controls.AutoUpdates.Add_Click({
     try {
         $settings = Get-UpdateSettings
@@ -82,6 +102,7 @@ function Set-Busy([bool]$Busy) {
     $controls.DeepScan.IsEnabled = -not $Busy
     $controls.OpenEnvironment.IsEnabled = -not $Busy
     $controls.AutoUpdates.IsEnabled = -not $Busy
+    $controls.PreserveEnvironment.IsEnabled = -not $Busy
     $controls.Installations.IsEnabled = -not $Busy
     $controls.Install.IsEnabled = -not $Busy
     $controls.Uninstall.IsEnabled = -not $Busy
@@ -216,6 +237,7 @@ $timer.Add_Tick({
             $controls.Installations.Items.Clear()
             $script:scan = $null
             $controls.AutoUpdates.IsChecked = (Get-UpdateSettings).Enabled
+            $controls.PreserveEnvironment.IsChecked = (Get-UpdateSettings).PreserveEnvironment
         } else {
             $controls.Status.Text = 'Removal finished. Check installation again to review remaining items.'
             $controls.Report.Text = $output -join "`r`n"
@@ -275,7 +297,14 @@ function Confirm-InstallPlan($Plan) {
     $details = "Install to: $($Plan.Destination)`r`n`r`nPermanently remove these old installations and their data:"
     if ($paths.Count -eq 0) { $details += "`r`nNone." }
     else { $details += "`r`n" + ($paths -join "`r`n") }
-    $details += "`r`n`r`nThe running setup folder is preserved. Private recovery copies of old credentials/databases will be kept."
+    $details += "`r`n`r`nThe running setup folder is preserved. Private recovery copies of old databases will be kept."
+    if ($Plan.PreserveEnvironment) {
+        if ($null -ne $Plan.PreservedEnvironment) {
+            $details += "`r`nYour existing .env from $($Plan.PreservedEnvironment.Folder) will be kept exactly as it is (new options are only added as commented-out lines). A private recovery copy is also retained."
+        } else { $details += "`r`nNo existing .env was found to keep; a new one will be created from the values entered." }
+    } else {
+        $details += "`r`nPreserve .env is OFF: a new .env will be created from the values entered, and old .env files are deleted with no recovery copy."
+    }
     $details += "`r`nRun at sign-in: $($Plan.Options.RunOnLogon); start now: $($Plan.Options.StartNow)."
     $details += "`r`nAutomatic launch-time updates (setup and bot): $($Plan.Options.AutoUpdates)."
     if ($Plan.Options.RegisterCommands) { $details += "`r`nDiscord slash commands will be updated for the selected server." }
@@ -284,6 +313,14 @@ function Confirm-InstallPlan($Plan) {
     if ([Windows.MessageBox]::Show($window, "$details`r`n`r`nProceed?", 'Confirm installation', 'YesNo', 'Warning', 'No') -ne 'Yes') {
         $controls.Status.Text = 'Installation cancelled. No installation changes were made.'
         return
+    }
+    if ($Plan.DiscardedEnvironments.Count -gt 0) {
+        $warning = "These .env files contain your bot token and settings. They will be PERMANENTLY DELETED with NO backup and cannot be recovered:`r`n`r`n" +
+            ($Plan.DiscardedEnvironments -join "`r`n") + "`r`n`r`nDelete them?"
+        if ([Windows.MessageBox]::Show($window, $warning, 'Permanently delete .env', 'YesNo', 'Stop', 'No') -ne 'Yes') {
+            $controls.Status.Text = 'Installation cancelled. No installation changes were made.'
+            return
+        }
     }
     $controls.Status.Text = 'Preparing files, then removing confirmed old installations and installing...'
     Start-BackgroundOperation {

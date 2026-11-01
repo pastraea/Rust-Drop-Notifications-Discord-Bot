@@ -203,8 +203,18 @@ The setup screen includes:
 
 - Editable destination (default `%LOCALAPPDATA%\RustDropsBot`) and folder picker.
 - Masked bot token, application ID, and Discord server ID.
-- Optional reuse of a scanned installation's configuration and/or SQLite database.
-  Blank credential fields keep reused values; entered fields override them.
+- **Preserve my existing .env exactly (recommended)**, on by default. With a scanned
+  installation selected, its `.env` is carried into the new installation byte-for-byte:
+  setup never re-parses or rewrites it, so comments, ordering, quoting, and extra
+  settings survive. Options introduced in the new version are only appended at the end
+  as commented-out lines (`# NAME=default`) and never change existing lines. The
+  token/ID fields are locked while this applies. The installer-managed layout needs the
+  database at `./data/bot.db`; a `.env` with a custom `DATABASE_PATH` is refused with an
+  explanation rather than silently changed.
+- Optional reuse of a scanned installation's SQLite database.
+- Turning **Preserve** off makes setup create a new `.env` from the fields below and
+  **permanently delete the old `.env` with no recovery copy**. A second, separate
+  confirmation lists each file that will be deleted, and the default answer is No.
 - Separate checkboxes for current-user sign-in startup, starting immediately,
   registering slash commands, and desktop/Start menu start shortcuts.
 - Separate **Cancel** and **Install** buttons.
@@ -227,8 +237,10 @@ The running setup copy can supply a database through SQLite's online backup API.
 The private staging/recovery folder is shown in the result under
 `%LOCALAPPDATA%\RustDropsBot-Setup\<unique-id>`. It may contain secret credentials.
 Recovery copies are intentionally retained: verify the new bot, then remove these
-specific folders manually when no longer needed. Errors explicitly report possible
-partial changes and the recovery location; automatic rollback is not promised.
+specific folders manually when no longer needed. With **Preserve** turned off, no
+recovery copy of the old `.env` is made (databases are still backed up). Errors
+explicitly report possible partial changes and the recovery location; automatic
+rollback is not promised.
 
 The installed launcher remains at `%ProgramData%\RustDropsBot\start-rust-bot.ps1`,
 with private output/error logs alongside it. Optional `RustDropsBot` startup runs
@@ -269,7 +281,10 @@ latest version on future launches rather than overwriting itself. For the bot,
 the updater extracts the verified payload, installs locked dependencies, builds,
 and validates configuration before replacing the managed installation at the
 same path. It preserves `.env`, the `data` directory (including database
-sidecars), and shortcut ownership metadata. Automatic bot updates require the
+sidecars), and shortcut ownership metadata. The `.env` is never deleted or
+rewritten; while **Preserve my existing .env** is on (the default, also under
+**More**), new options from the release are appended as commented-out lines, and
+with it off the file is still carried forward untouched. Automatic bot updates require the
 installer-managed `data\bot.db` path. They can install any newer stable version,
 including a major release, so enable this only if you accept unattended changes.
 
@@ -301,14 +316,22 @@ SQLite WAL backup is also tested on temporary data.
 | `DISCORD_TOKEN` | Yes | Bot token used to log in |
 | `DISCORD_CLIENT_ID` | For deploy script | Application id for slash-command registration |
 | `DISCORD_GUILD_ID` | For deploy script | Target guild for command registration |
-| `DATABASE_PATH` | Optional | SQLite file path (`./data/bot.db` default) |
-| `CHECK_INTERVAL_MS` | Optional | Scheduler interval in ms (`300000` default) |
-| `TWITCH_MOCK_DROPS` | Optional | Use mock Twitch data (`true`/`false`) |
-| `KICK_MOCK_DROPS` | Optional | Use mock Kick data (`true`/`false`) |
+| `DATABASE_PATH` | Optional | SQLite file path (`./data/bot.db` default; blank uses the default) |
+| `CHECK_INTERVAL_MS` | Optional | Scheduler interval in whole milliseconds, `1000`-`86400000` (`300000` default; blank uses the default) |
+| `TWITCH_MOCK_DROPS` | Optional | Use mock Twitch data: `true`/`false` (also `1`/`0`, `yes`/`no`, `on`/`off`; blank means `false`) |
+| `KICK_MOCK_DROPS` | Optional | Use mock Kick data (same accepted values) |
+
+Invalid values stop the bot at startup with a message naming the setting and the
+rule it broke (values are never printed). Previously a mistyped interval such as
+`abc` could make the scheduler fire continuously, and an unrecognised flag such as
+`ture` silently meant `false`.
 
 ### Production Host Notes
 
 - Run `npm run build` and then `npm start`.
+- The bot shuts down cleanly on `SIGINT`/`SIGTERM` (Ctrl+C, `systemctl stop`,
+  `docker stop`): it stops scheduling, waits for a drop cycle already running, then
+  disconnects from Discord and closes the database. Shutdown is forced after 15 seconds.
 - Keep `.env` outside source control.
 - Persist `data/` on durable storage if deployed in containers or ephemeral hosts.
 - Prefer a process manager (systemd, PM2, Docker restart policy) for automatic restarts.

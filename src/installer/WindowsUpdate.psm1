@@ -10,18 +10,32 @@ function Get-UpdateSettings {
     $path = Get-UpdateSettingsPath
     Assert-PlainPath $path
     if (-not (Test-Path -LiteralPath $path)) {
-        return [pscustomobject]@{ Enabled = $false; Repository = '' }
+        return [pscustomobject]@{ Enabled = $false; Repository = ''; PreserveEnvironment = $true }
     }
     $settings = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
     if ($settings.Enabled -isnot [bool] -or $settings.Repository -isnot [string]) {
         throw 'Updater settings are invalid. Review the automatic update setting in setup.'
     }
-    return $settings
+    # Files written before this option existed keep the safe default: never discard an existing .env.
+    $preserve = $true
+    if ($settings.PSObject.Properties['PreserveEnvironment']) {
+        if ($settings.PreserveEnvironment -isnot [bool]) {
+            throw 'Updater settings are invalid. Review the .env preservation setting in setup.'
+        }
+        $preserve = $settings.PreserveEnvironment
+    }
+    return [pscustomobject]@{ Enabled = $settings.Enabled; Repository = $settings.Repository; PreserveEnvironment = $preserve }
 }
 
-function Set-UpdateSettings([bool]$Enabled, [string]$Repository) {
+# PreserveEnvironment left as $null keeps the stored value, so changing one preference never resets the other.
+function Set-UpdateSettings([bool]$Enabled, [string]$Repository, [object]$PreserveEnvironment = $null) {
     $path = Get-UpdateSettingsPath
     Assert-PlainPath $path
+    if ($null -eq $PreserveEnvironment) {
+        $PreserveEnvironment = $true
+        try { $PreserveEnvironment = [bool](Get-UpdateSettings).PreserveEnvironment } catch { $PreserveEnvironment = $true }
+    }
+    [bool]$PreserveEnvironment = $PreserveEnvironment
     $directory = Split-Path $path -Parent
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
     $acl = New-Object Security.AccessControl.DirectorySecurity
@@ -35,7 +49,7 @@ function Set-UpdateSettings([bool]$Enabled, [string]$Repository) {
     [IO.Directory]::SetAccessControl($directory, $acl)
     $temporary = Join-Path $directory ([guid]::NewGuid().ToString() + '.json')
     try {
-        [IO.File]::WriteAllText($temporary, ([ordered]@{ Enabled = $Enabled; Repository = $Repository } | ConvertTo-Json))
+        [IO.File]::WriteAllText($temporary, ([ordered]@{ Enabled = $Enabled; Repository = $Repository; PreserveEnvironment = $PreserveEnvironment } | ConvertTo-Json))
         Move-Item -LiteralPath $temporary -Destination $path -Force
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
@@ -184,6 +198,10 @@ function Update-InstalledBot([string]$Repository, [string]$Work, $Release, [stri
             foreach ($item in @(Get-ChildItem -LiteralPath $path -Force -Recurse)) { Assert-PlainPath $item.FullName }
             Copy-Item -LiteralPath $path -Destination (Join-Path $stage $relative) -Recurse
         }
+    }
+    # Preserved configuration is carried over unchanged; only new, commented-out options are appended.
+    if ([bool](Get-UpdateSettings).PreserveEnvironment) {
+        & $install { param($Stage) Update-StagedEnvironment $Stage } $stage
     }
     & $install { param($Tools, $Stage)
         Invoke-InstallCommand $Tools.Node @((Join-Path $Stage 'src\installer\validateConfiguration.cjs')) $Stage 'Updated configuration validation'

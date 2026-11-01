@@ -10,6 +10,7 @@ import { KickDropsProvider } from "./providers/kick.js";
 import { TwitchDropsProvider } from "./providers/twitch.js";
 import type { DropsProvider } from "./providers/base.js";
 import { startScheduler } from "./scheduler.js";
+import { createShutdown } from "./shutdown.js";
 
 /**
  * Bot entrypoint: bootstraps runtime config, providers, interaction handlers, and scheduler.
@@ -19,6 +20,29 @@ const config = getRuntimeConfig();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const db = new BotDb(config.DATABASE_PATH);
+let scheduler: ReturnType<typeof startScheduler> | undefined;
+
+const shutdown = createShutdown({
+    timeoutMs: 15000,
+    exit: (code) => process.exit(code),
+    steps: [
+        { name: "scheduler", run: () => scheduler?.stop() },
+        { name: "discord client", run: () => client.destroy() },
+        { name: "database", run: () => db.close() }
+    ]
+});
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => void shutdown(signal));
+}
+process.on("unhandledRejection", (reason) => {
+    console.error("Unhandled promise rejection:", reason);
+    void shutdown("unhandledRejection", 1);
+});
+process.on("uncaughtException", (error) => {
+    console.error("Uncaught exception:", error);
+    void shutdown("uncaughtException", 1);
+});
 const providers = [
     new TwitchDropsProvider({
         useMockData: config.TWITCH_MOCK_DROPS,
@@ -35,7 +59,7 @@ client.once(Events.ClientReady, (readyClient) => {
         }`
     );
 
-    startScheduler({
+    scheduler = startScheduler({
         client,
         db,
         providers,
@@ -88,5 +112,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.login(config.DISCORD_TOKEN).catch((error) => {
     console.error("Discord login failed:", error);
-    process.exit(1);
+    void shutdown("login failure", 1);
 });

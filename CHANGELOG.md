@@ -6,7 +6,24 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 ## [Unreleased]
 
-- No changes yet.
+### Added
+
+- **Preserve my existing .env** option (on by default) in the Install/Reinstall screen and under **More**. An existing `.env` is carried into reinstalls and updates byte-for-byte, so comments, ordering, quoting, and custom settings are never lost. New options from a release are appended only as commented-out lines.
+- Explicit opt-out: with Preserve off, Install/Reinstall creates a new `.env` and deletes the old one with no recovery copy, after a separate confirmation that lists every file to be deleted.
+- Graceful shutdown on `SIGINT`/`SIGTERM`, `unhandledRejection` and `uncaughtException`: the scheduler stops and finishes its running cycle, then the Discord client and database close (forced exit after 15 seconds).
+- Tests for configuration validation, shutdown, and scheduler behavior.
+
+### Changed
+
+- Configuration is validated strictly at startup. `CHECK_INTERVAL_MS` must be a whole number from 1000 to 86400000; a mistyped value such as `abc` previously made the scheduler fire continuously. `TWITCH_MOCK_DROPS`/`KICK_MOCK_DROPS` accept `true/false/1/0/yes/no/on/off`, and unrecognised values are now an error instead of silently meaning `false`. Blank values use the default.
+- The Install screen's "Reuse configuration" checkbox is replaced by Preserve .env. Reinstall no longer re-parses and rewrites `.env`, so valid files that the old reader refused (quotes, `$`, duplicate keys) are now kept as they are.
+- `scheduler.startScheduler` returns a handle with `stop()` instead of a raw timer.
+
+### Upgrade Notes
+
+- To change the token or IDs during a reinstall, turn Preserve off (the old `.env` is deleted with no backup) or edit the installed `.env` directly.
+- A preserved `.env` must use the installer-managed database path `./data/bot.db`; setup explains and refuses anything else.
+- Settings files from earlier versions default to Preserve on.
 
 ## [0.3.2] - 2026-11-01
 

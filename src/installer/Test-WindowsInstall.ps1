@@ -19,7 +19,7 @@ function New-TestOptions([string]$Destination) {
     [pscustomobject]@{
         Destination = $Destination; Token = 'test-only-secret-not-a-real-token'
         ClientId = '123456789012345678'; GuildId = '234567890123456789'
-        ReuseFolder = ''; ReuseConfiguration = $false; ReuseDatabase = $false
+        ReuseFolder = ''; PreserveEnvironment = $true; ReuseDatabase = $false
         RunOnLogon = $false; StartNow = $false; RegisterCommands = $false
         DesktopShortcut = $false; StartMenuShortcut = $false; AllowNodeInstall = $false
         AutoUpdates = $false
@@ -170,16 +170,18 @@ try {
     $old = Join-Path $temporary 'old-bot'
     New-Item -ItemType Directory -Path (Join-Path $old 'data') -Force | Out-Null
     '{"name":"rust-drops-reminder-bot"}' | Set-Content (Join-Path $old 'package.json')
-    "DISCORD_TOKEN=old-test-token`r`nDISCORD_CLIENT_ID=123456789012345678`r`nDISCORD_GUILD_ID=234567890123456789`r`nDATABASE_PATH=./data/bot.db" |
-        Set-Content (Join-Path $old '.env')
+    # Deliberately awkward: comments, quotes, "$", duplicate keys, CRLF and no trailing newline. It must survive untouched.
+    $oldEnvironmentText = (@('# my notes', "DISCORD_TOKEN='old-test-token' # keep", 'DISCORD_CLIENT_ID=123456789012345678',
+        'DISCORD_GUILD_ID=234567890123456789', 'DATABASE_PATH="./data/bot.db"', 'CUSTOM_SETTING=pa$$word"quoted"',
+        'DUPLICATE=1', 'DUPLICATE=2') -join "`r`n")
+    $oldEnvironmentBytes = (New-Object Text.UTF8Encoding $false).GetBytes($oldEnvironmentText)
+    [IO.File]::WriteAllBytes((Join-Path $old '.env'), $oldEnvironmentBytes)
     'fixture-database' | Set-Content (Join-Path $old 'data\bot.db')
     $options.ReuseFolder = $old
-    $options.ReuseConfiguration = $true
+    $options.PreserveEnvironment = $true
     $options.Token = ''
-    $reused = New-InstallEnvironment $options
-    Assert-InstallTest ($reused -match 'DISCORD_TOKEN="old-test-token"') 'Reused credentials lost.'
-    $options.Token = 'replacement-test-token'
-    Assert-InstallTest ((New-InstallEnvironment $options) -match 'DISCORD_TOKEN="replacement-test-token"') 'New fields did not override reused values.'
+    $options.ClientId = ''
+    $options.GuildId = ''
     $options.ReuseDatabase = $true
     & $module {
         param($Old)
@@ -189,11 +191,14 @@ try {
             [pscustomobject]@{ Repository = $Repository; ManualFolder = [bool]$ManualFolder }
         }
         function script:Remove-BotInstallation {
-            param($Plan, $DeleteData, $DeleteFolder, $BackupDataDirectory, $ProtectedRepository)
+            param($Plan, $DeleteData, $DeleteFolder, $BackupDataDirectory, $ProtectedRepository, [switch]$SkipEnvironmentBackup)
             $script:events += 'remove-old'
+            $script:skipEnv = [bool]$SkipEnvironmentBackup
             if (-not $DeleteData -or -not $DeleteFolder -or -not $BackupDataDirectory) { throw 'Missing cleanup/backup consent.' }
             New-Item -ItemType Directory -Path $BackupDataDirectory | Out-Null
-            Copy-Item -LiteralPath (Join-Path $Plan.Repository '.env') -Destination (Join-Path $BackupDataDirectory '.env')
+            if (-not $SkipEnvironmentBackup) {
+                Copy-Item -LiteralPath (Join-Path $Plan.Repository '.env') -Destination (Join-Path $BackupDataDirectory '.env')
+            }
             Copy-Item -LiteralPath (Join-Path $Plan.Repository 'data\bot.db') -Destination (Join-Path $BackupDataDirectory 'bot.db')
             # No real cleanup occurs in the mocked fixture adapter.
         }
@@ -202,6 +207,7 @@ try {
     Assert-InstallTest ($plan.Removals.Count -eq 1) 'Existing installation was not planned for removal.'
     Assert-InstallTest (Test-Path (Join-Path $old '.env')) 'Planning removed original credentials.'
     Assert-InstallTest ((& $module { $script:events.Count }) -eq 0) 'Planning performed system changes.'
+    Assert-InstallTest ($plan.PreserveEnvironment -and $null -ne $plan.PreservedEnvironment -and $plan.DiscardedEnvironments.Count -eq 0) 'Default plan must preserve the existing .env and discard nothing.'
     & $module { $script:failLabel = 'Bot build' }
     Assert-InstallFailure { Install-WindowsBot $plan } 'Bot build fixture failure'
     Assert-InstallTest ((& $module { $script:events }) -notcontains 'remove-old') 'Old installation removed before new build succeeded.'
@@ -217,12 +223,14 @@ try {
     Assert-InstallTest ([array]::IndexOf($events, 'Discord command registration') -lt [array]::IndexOf($events, 'remove-old')) 'Command registration failure could destroy old installation.'
     Assert-InstallTest ($events -contains 'startup' -and $events -contains 'start-now') 'Selected startup/start options ignored.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination 'data\bot.db')).Trim() -eq 'fixture-database') 'Database not reused.'
-    Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination '.env')) -match 'replacement-test-token') 'Installed configuration missing.'
+    Assert-InstallTest (([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $options.Destination '.env')))) -ceq [Convert]::ToBase64String($oldEnvironmentBytes)) 'A preserved .env must be installed byte-for-byte identical.'
+    Assert-InstallTest ((& $module { $script:skipEnv }) -eq $false) 'Preserve mode must keep the .env recovery copy.'
     Assert-InstallTest (Test-Path (Join-Path $options.Destination 'dist\index.js')) 'Built files not installed.'
     Assert-InstallTest (Test-Path (Join-Path $options.Destination '.rust-drops-install.json')) 'Ownership metadata missing.'
     $updateSettings = & $module { Get-UpdateSettings }
     Assert-InstallTest ($updateSettings.Enabled -and $updateSettings.Repository -eq $options.Destination) 'Installer did not save update opt-in and target identity.'
-    Assert-InstallTest ($result -notmatch 'replacement-test-token') 'Install result leaked credentials.'
+    Assert-InstallTest ((& $module { Get-UpdateSettings }).PreserveEnvironment) 'Installer did not save the .env preservation preference.'
+    Assert-InstallTest ($result -notmatch 'old-test-token') 'Install result leaked credentials.'
     Assert-InstallTest ($result -match 'recovery') 'Recovery location missing from result.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $source '.env')).Trim() -eq 'do-not-copy') 'Source credentials modified.'
     Assert-InstallTest (@(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'RustDropsBot-Setup') -Recurse -Filter '.env' -Force).Count -ge 1) 'Recovery copies not preserved.'
@@ -236,7 +244,7 @@ try {
     Assert-InstallFailure { Install-WindowsBot $plan } 'changed since confirmation'
     Assert-InstallTest ((& $module { $script:events }) -notcontains 'remove-old') 'Changed scan performed removal.'
 
-    $options.ReuseConfiguration = $false
+    $options.PreserveEnvironment = $true
     $options.ReuseDatabase = $false
     $options.ReuseFolder = ''
     $options.Token = 'fresh-test-token'
@@ -254,6 +262,89 @@ try {
     Assert-InstallTest (-not (& $module { Get-UpdateSettings }).Enabled) 'Disabling updates in installation options did not save opt-out.'
     Assert-InstallTest (-not (Test-Path (Join-Path $options.Destination 'data\bot.db'))) 'Fresh install copied bundled database.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination '.env')) -notmatch 'do-not-copy') 'Fresh install copied source secrets.'
+
+    # Preserve .env: guards, change detection, and the explicit opt-out.
+    function New-FixtureBot([string]$Name, [string]$EnvironmentText) {
+        $folder = Join-Path $temporary $Name
+        New-Item -ItemType Directory -Path (Join-Path $folder 'data') -Force | Out-Null
+        '{"name":"rust-drops-reminder-bot"}' | Set-Content (Join-Path $folder 'package.json')
+        [IO.File]::WriteAllText((Join-Path $folder '.env'), $EnvironmentText)
+        'fixture-database' | Set-Content (Join-Path $folder 'data\bot.db')
+        return $folder
+    }
+    $guard = New-TestOptions (Join-Path $temporary 'guard-install')
+    $guard.PreserveEnvironment = $true
+    $guard.Token = ''; $guard.ClientId = ''; $guard.GuildId = ''
+
+    $customDatabase = New-FixtureBot 'custom-database-bot' "DISCORD_TOKEN=x`r`nDATABASE_PATH=D:\elsewhere\bot.db"
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder) } $customDatabase
+    $guard.ReuseFolder = $customDatabase
+    Assert-InstallFailure { Get-InstallationPlan $guard $source } 'custom DATABASE_PATH'
+
+    $withoutIds = New-FixtureBot 'no-ids-bot' 'DISCORD_TOKEN=x'
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder) } $withoutIds
+    $guard.ReuseFolder = $withoutIds
+    $guard.RegisterCommands = $true
+    Assert-InstallFailure { Get-InstallationPlan $guard $source } 'DISCORD_CLIENT_ID'
+    $guard.RegisterCommands = $false
+
+    $typed = New-FixtureBot 'typed-credentials-bot' 'DISCORD_TOKEN=x'
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder) } $typed
+    $guard.ReuseFolder = $typed
+    $guard.Token = 'typed-token'
+    Assert-InstallFailure { Get-InstallationPlan $guard $source } 'would not be used'
+    $guard.Token = ''
+    Assert-InstallTest ($null -ne (Get-InstallationPlan $guard $source).PreservedEnvironment) 'A valid existing .env was not preserved.'
+
+    $noEnvironment = New-FixtureBot 'no-env-bot' ''
+    Remove-Item -LiteralPath (Join-Path $noEnvironment '.env')
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder) } $noEnvironment
+    $guard.ReuseFolder = $noEnvironment
+    Assert-InstallFailure { Get-InstallationPlan $guard $source } 'Enter a bot token'
+    $guard.Token = 'fresh-token-for-missing-env'
+    $freshPlan = Get-InstallationPlan $guard $source
+    Assert-InstallTest ($null -eq $freshPlan.PreservedEnvironment -and $freshPlan.Environment -match 'fresh-token-for-missing-env') 'A missing .env must fall back to the entered credentials.'
+
+    $drift = New-FixtureBot 'drift-bot' "DISCORD_TOKEN=drift-original`r`n"
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder); $script:events = @() } $drift
+    $guard.Token = ''
+    $guard.ReuseFolder = $drift
+    $guard.Destination = Join-Path $temporary 'drift-install'
+    $driftPlan = Get-InstallationPlan $guard $source
+    [IO.File]::AppendAllText((Join-Path $drift '.env'), "EXTRA=1`r`n")
+    Assert-InstallFailure { Install-WindowsBot $driftPlan } 'changed since confirmation'
+    Assert-InstallTest ((& $module { $script:events }) -notcontains 'remove-old') 'An edited .env still allowed removal of the old installation.'
+
+    # Opt-out: the old .env is deleted with no recovery copy, and only a freshly entered one is installed.
+    & $module { param($Folder) $script:fixtureScan.Folders = @($Folder); $script:events = @(); $script:skipEnv = $null } $old
+    $discard = New-TestOptions (Join-Path $temporary 'opt-out-install')
+    $discard.ReuseFolder = $old
+    $discard.PreserveEnvironment = $false
+    $discard.Token = 'new-secret-test-token'
+    $discardPlan = Get-InstallationPlan $discard $source
+    Assert-InstallTest ($discardPlan.DiscardedEnvironments.Count -eq 1 -and $discardPlan.DiscardedEnvironments[0] -eq (Join-Path $old '.env')) 'The plan must list every .env that would be deleted.'
+    Assert-InstallTest ($null -eq $discardPlan.PreservedEnvironment -and -not $discardPlan.PreserveEnvironment) 'Opt-out plan must not carry the old .env.'
+    Assert-InstallTest ([IO.File]::ReadAllBytes((Join-Path $old '.env')).Length -eq $oldEnvironmentBytes.Length) 'Planning modified the old .env.'
+    $null = Install-WindowsBot $discardPlan
+    Assert-InstallTest ((& $module { $script:skipEnv }) -eq $true) 'Opt-out must skip the .env recovery copy.'
+    $newEnvironment = [IO.File]::ReadAllText((Join-Path $discard.Destination '.env'))
+    Assert-InstallTest ($newEnvironment -match 'new-secret-test-token' -and $newEnvironment -notmatch 'old-test-token') 'Opt-out must install a new .env only.'
+    Assert-InstallTest (-not (& $module { Get-UpdateSettings }).PreserveEnvironment) 'Opt-out preference was not saved.'
+
+    # New options from the bundled .env.example are appended as comments without touching existing bytes.
+    $utf8 = New-Object Text.UTF8Encoding $false
+    $example = "A=1`nB=2`nC=`n# NOTE=ignored`nD=4"
+    $original = $utf8.GetBytes("A=custom`r`n#D=9")
+    $updated = Add-NewEnvironmentKeys $original $example
+    $text = $utf8.GetString($updated)
+    Assert-InstallTest ($text.StartsWith($utf8.GetString($original))) 'Existing .env bytes must stay a prefix of the updated file.'
+    Assert-InstallTest ($text -match '(?m)^# B=2' -and $text -match '(?m)^# C=' -and $text -notmatch '(?m)^# A=' -and $text -notmatch '(?m)^# D=' -and $text -notmatch 'NOTE') 'Only missing options should be appended, as comments.'
+    Assert-InstallTest ($text -match "`r`n# B=2") 'Appended lines must follow the file''s CRLF line endings.'
+    Assert-InstallTest (([Convert]::ToBase64String((Add-NewEnvironmentKeys $updated $example))) -ceq [Convert]::ToBase64String($updated)) 'Appending options must be idempotent.'
+    Assert-InstallTest (([Convert]::ToBase64String((Add-NewEnvironmentKeys $original 'A=1'))) -ceq [Convert]::ToBase64String($original)) 'A file with every option must be returned unchanged.'
+    $bom = [byte[]](0xEF, 0xBB, 0xBF) + $utf8.GetBytes('A=1')
+    $withBom = Add-NewEnvironmentKeys $bom 'A=1'
+    Assert-InstallTest (([Convert]::ToBase64String($withBom)) -ceq [Convert]::ToBase64String($bom)) 'A BOM must not hide an existing option or be altered.'
 
     # Reload to exercise actual startup/Node adapters with only the Windows side effects mocked.
     Remove-Module $module.Name -Force

@@ -66,41 +66,104 @@ function Get-InstallNodeTools([bool]$AllowNodeInstall) {
     return [pscustomobject]@{ Node = $node.Source; Npm = $npm.Source }
 }
 
-function Read-InstallEnvironment([string]$Folder) {
-    $path = Join-Path $Folder '.env'
-    Assert-PlainPath $path
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'The selected configuration source has no .env file.' }
-    $values = @{}
-    foreach ($line in [IO.File]::ReadAllLines($path)) {
-        if ($line -match '^\s*(?:#.*)?$') { continue }
-        if ($line -notmatch '^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$') {
-            throw 'Existing configuration uses an unsupported format. Enter credentials manually instead.'
-        }
+function Get-PreserveEnvironmentOption($Options) {
+    # An absent value means the safe default: keep an existing .env.
+    if ($Options.PSObject.Properties['PreserveEnvironment']) { return [bool]$Options.PreserveEnvironment }
+    return $true
+}
+
+function Get-EnvironmentFingerprint($Plan) {
+    if ($null -ne $Plan.PreservedEnvironment) { return 'file:' + [Convert]::ToBase64String([byte[]]$Plan.PreservedEnvironment.Bytes) }
+    return 'text:' + [string]$Plan.Environment
+}
+
+# Appends options that exist in the bundled .env.example but not in the user's file, as commented-out lines.
+# The original bytes are never modified, reordered or re-encoded; only a trailing block is added.
+function Add-NewEnvironmentKeys([byte[]]$Bytes, [string]$ExampleText) {
+    $encoding = New-Object Text.UTF8Encoding $false
+    $existing = $encoding.GetString($Bytes).TrimStart([char]0xFEFF)
+    $additions = @()
+    foreach ($line in ($ExampleText -split "`r?`n")) {
+        if ($line -notmatch '^\s*([A-Z_][A-Z0-9_]*)\s*=(.*)$') { continue }
         $key = $Matches[1]
-        $value = $Matches[2]
-        if ($values.ContainsKey($key)) { throw 'Existing configuration contains duplicate settings.' }
-        if ($value.StartsWith('"') -or $value.StartsWith("'")) {
-            $quote = $value.Substring(0, 1)
-            $end = $value.IndexOf($quote, 1)
-            if ($end -lt 1 -or $value.Substring($end + 1).Trim() -notmatch '^(#.*)?$') {
-                throw 'Existing configuration uses unsupported quoting. Enter credentials manually instead.'
-            }
-            $value = $value.Substring(1, $end - 1)
-        } else { $value = ($value -split '#', 2)[0].Trim() }
-        if ($value -match '[\r\n`"$]') { throw 'Existing configuration contains unsupported escaped or dynamic values.' }
-        $values[$key] = $value
+        $default = $Matches[2].Trim()
+        if ($existing -match ('(?im)^[ \t]*(?:export[ \t]+)?#?[ \t]*' + [regex]::Escape($key) + '[ \t]*=')) { continue }
+        $additions += ('# ' + $key + '=' + $default)
     }
-    return $values
+    if ($additions.Count -eq 0) { return ,$Bytes }
+    $newline = "`n"
+    if ($existing.Contains("`r`n")) { $newline = "`r`n" }
+    $block = ''
+    if ($Bytes.Length -gt 0 -and -not $existing.EndsWith("`n")) { $block += $newline }
+    $block += $newline + '# Added by setup: new options in this version (disabled; remove the leading # to use).' + $newline
+    $block += ($additions -join $newline) + $newline
+    $extra = $encoding.GetBytes($block)
+    $combined = New-Object byte[] ($Bytes.Length + $extra.Length)
+    [Array]::Copy($Bytes, 0, $combined, 0, $Bytes.Length)
+    [Array]::Copy($extra, 0, $combined, $Bytes.Length, $extra.Length)
+    return ,$combined
+}
+
+function Update-StagedEnvironment([string]$Stage) {
+    $envPath = Join-Path $Stage '.env'
+    if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) { return }
+    $examplePath = Join-Path $Stage '.env.example'
+    $example = ''
+    if (Test-Path -LiteralPath $examplePath -PathType Leaf) { $example = [IO.File]::ReadAllText($examplePath) }
+    $bytes = [IO.File]::ReadAllBytes($envPath)
+    $updated = Add-NewEnvironmentKeys $bytes $example
+    if ($updated.Length -ne $bytes.Length) { [IO.File]::WriteAllBytes($envPath, $updated) }
+}
+
+function Assert-PreservedDatabasePath([string]$Text) {
+    $lines = @($Text -split "`r?`n" | Where-Object { $_ -match '^\s*(?:export\s+)?DATABASE_PATH\s*=' })
+    if ($lines.Count -eq 0) { return }
+    if ($lines.Count -gt 1) { throw 'The existing .env has several DATABASE_PATH entries. Resolve them, or turn off Preserve .env to create a new file.' }
+    $value = ($lines[0] -replace '^\s*(?:export\s+)?DATABASE_PATH\s*=\s*', '').Trim()
+    if ($value.StartsWith('"') -or $value.StartsWith("'")) {
+        $quote = $value.Substring(0, 1)
+        $end = $value.IndexOf($quote, 1)
+        if ($end -lt 1) { throw 'The existing .env has an unsupported DATABASE_PATH. Resolve it, or turn off Preserve .env.' }
+        $value = $value.Substring(1, $end - 1)
+    } else { $value = ($value -split '#', 2)[0].Trim() }
+    if (($value.Replace('\', '/')) -notin @('./data/bot.db', 'data/bot.db')) {
+        throw 'The existing .env sets a custom DATABASE_PATH. Installer-managed copies keep their database at ./data/bot.db. Edit the file to use that path, or turn off Preserve .env.'
+    }
+}
+
+# Returns $null when there is nothing to preserve, otherwise the exact bytes for the new installation's .env.
+function Get-PreservedEnvironment($Options, [string]$Source) {
+    if (-not (Get-PreserveEnvironmentOption $Options) -or -not $Options.ReuseFolder) { return $null }
+    $path = Join-Path $Options.ReuseFolder '.env'
+    Assert-PlainPath $path
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    if ((Get-Item -LiteralPath $path -Force).Length -gt 1MB) { throw 'The existing .env is unexpectedly large. Review it before installing.' }
+    if ($Options.Token -or $Options.ClientId -or $Options.GuildId) {
+        throw 'Preserve .env keeps your existing file unchanged, so the entered token or IDs would not be used. Clear those fields, or turn off Preserve .env to create a new file.'
+    }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $text = (New-Object Text.UTF8Encoding $false).GetString($bytes)
+    Assert-PreservedDatabasePath $text
+    if ($Options.RegisterCommands) {
+        foreach ($key in @('DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID')) {
+            if ($text -notmatch ('(?m)^[ \t]*(?:export[ \t]+)?' + $key + '[ \t]*=[ \t]*[^\s#]')) {
+                throw "Registering commands needs $key, which the existing .env does not set. Add it to that file, or turn off command registration."
+            }
+        }
+    }
+    $examplePath = Join-Path $Source '.env.example'
+    $example = ''
+    if (Test-Path -LiteralPath $examplePath -PathType Leaf) { $example = [IO.File]::ReadAllText($examplePath) }
+    return [pscustomobject]@{ Bytes = [byte[]](Add-NewEnvironmentKeys $bytes $example); Folder = [string]$Options.ReuseFolder }
 }
 
 function New-InstallEnvironment($Options) {
     $values = @{}
-    if ($Options.ReuseConfiguration) { $values = Read-InstallEnvironment $Options.ReuseFolder }
     foreach ($pair in @(@('DISCORD_TOKEN', $Options.Token), @('DISCORD_CLIENT_ID', $Options.ClientId), @('DISCORD_GUILD_ID', $Options.GuildId))) {
         if ($pair[1]) { $values[$pair[0]] = [string]$pair[1] }
     }
     if (-not $values.ContainsKey('DISCORD_TOKEN') -or [string]::IsNullOrWhiteSpace($values.DISCORD_TOKEN)) {
-        throw 'Enter a bot token or select an existing configuration containing one.'
+        throw 'Enter a bot token, or keep an existing installation with Preserve .env turned on.'
     }
     if ($values.DISCORD_TOKEN -match '^\d+$') { throw 'The bot token cannot be an application ID. Enter the secret token from the Bot page.' }
     if ($Options.RegisterCommands) {
@@ -193,7 +256,9 @@ function Get-InstallationPlan {
             throw 'The destination and an old installation cannot be nested inside one another.'
         }
     }
-    if ($Options.ReuseConfiguration -or $Options.ReuseDatabase) {
+    $preserveEnvironment = Get-PreserveEnvironmentOption $Options
+    if ($Options.ReuseDatabase -and -not $Options.ReuseFolder) { throw 'Select an installation to reuse its database.' }
+    if ($Options.ReuseFolder -and ($Options.ReuseDatabase -or $preserveEnvironment)) {
         if ($candidates -notcontains $Options.ReuseFolder) { throw 'Select a configuration/database source found by the scan.' }
         Assert-PlainPath $Options.ReuseFolder
         if ((Get-CommandBotFolder '' $Options.ReuseFolder) -ne $Options.ReuseFolder) { throw 'The reuse source is not a confirmed bot installation.' }
@@ -202,10 +267,20 @@ function Get-InstallationPlan {
         $paths = @(Get-BotDataPaths $Options.ReuseFolder)
         if (-not (Test-Path -LiteralPath $paths[1] -PathType Leaf)) { throw 'The selected installation has no database to reuse.' }
     }
-    $environment = New-InstallEnvironment $Options
+    $preservedEnvironment = Get-PreservedEnvironment $Options $sourcePath
+    $environment = $null
+    if ($null -eq $preservedEnvironment) { $environment = New-InstallEnvironment $Options }
+    # With Preserve off, every old .env is deleted without a recovery copy; list them for explicit confirmation.
+    $discarded = @()
+    if (-not $preserveEnvironment) {
+        $discarded = @($plans | Where-Object { Test-Path -LiteralPath (Join-Path $_.Repository '.env') -PathType Leaf } |
+            ForEach-Object { Join-Path $_.Repository '.env' })
+    }
     return [pscustomobject]@{
         Source = $sourcePath; Destination = $destination; Removals = @($plans)
         Preserved = @($preserved); Environment = $environment; Options = $Options
+        PreservedEnvironment = $preservedEnvironment; PreserveEnvironment = [bool]$preserveEnvironment
+        DiscardedEnvironments = @($discarded)
         KnownFolders = @($candidates); ScanIssues = @($scan.Issues); DeepScan = [bool]$DeepScan
     }
 }
@@ -339,7 +414,7 @@ function Install-WindowsBotCore($Plan) {
     $oldFolders = @($Plan.Removals | ForEach-Object { $_.Repository } | Sort-Object)
     $newFolders = @($fresh.Removals | ForEach-Object { $_.Repository } | Sort-Object)
     if (($oldFolders -join '|') -ne ($newFolders -join '|')) { throw 'Installations changed since confirmation. Review a fresh scan before installing.' }
-    if ($fresh.Environment -cne $Plan.Environment) { throw 'Reused configuration changed since confirmation. Review installation settings again.' }
+    if ((Get-EnvironmentFingerprint $fresh) -cne (Get-EnvironmentFingerprint $Plan)) { throw 'Configuration changed since confirmation. Review installation settings again.' }
     if ([bool]$Plan.Options.RunOnLogon -or [bool]$Plan.Options.StartNow) {
         # The setup copy may be a source for reuse, but must not run a second bot alongside the new one.
         $processes = @(Get-CimInstance Win32_Process | Where-Object {
@@ -372,7 +447,11 @@ function Install-WindowsBotCore($Plan) {
         Invoke-InstallCommand $tools.Npm @('run', 'build') $stage 'Bot build'
         if (-not (Test-Path -LiteralPath (Join-Path $stage 'dist\index.js'))) { throw 'Build did not produce the bot entry point.' }
         $validation = Join-Path $stage 'src\installer\validateConfiguration.cjs'
-        [IO.File]::WriteAllText((Join-Path $stage '.env'), $fresh.Environment, (New-Object Text.UTF8Encoding $false))
+        if ($null -ne $fresh.PreservedEnvironment) {
+            [IO.File]::WriteAllBytes((Join-Path $stage '.env'), [byte[]]$fresh.PreservedEnvironment.Bytes)
+        } else {
+            [IO.File]::WriteAllText((Join-Path $stage '.env'), $fresh.Environment, (New-Object Text.UTF8Encoding $false))
+        }
         Invoke-InstallCommand $tools.Node @($validation) $stage 'Configuration validation'
         if ($Plan.Options.RegisterCommands) {
             Invoke-InstallCommand $tools.Node @('dist\commands\registerCommands.js') $stage 'Discord command registration'
@@ -382,7 +461,8 @@ function Install-WindowsBotCore($Plan) {
         foreach ($old in $fresh.Removals) {
             $backup = Join-Path $work ("old-data-" + $index)
             $null = Remove-BotInstallation -Plan $old -DeleteData $true -DeleteFolder $true `
-                -BackupDataDirectory $backup -ProtectedRepository $fresh.Source
+                -BackupDataDirectory $backup -ProtectedRepository $fresh.Source `
+                -SkipEnvironmentBackup:(-not $fresh.PreserveEnvironment)
             if ($old.Repository -eq $Plan.Options.ReuseFolder) { $reuseBackup = $backup }
             $index++
         }
@@ -419,11 +499,14 @@ function Install-WindowsBotCore($Plan) {
         New-InstallShortcuts $fresh.Destination $launcher $shortcuts
         Import-Module (Join-Path $PSScriptRoot 'WindowsUpdate.psm1') -Force
         $autoUpdates = $Plan.Options.PSObject.Properties['AutoUpdates'] -and [bool]$Plan.Options.AutoUpdates
-        Set-UpdateSettings -Enabled $autoUpdates -Repository $fresh.Destination
-        return "Installed to $($fresh.Destination).`r`nRun at user sign-in: $($Plan.Options.RunOnLogon).`r`nOld credentials/database backups (sensitive): $work`r`nThese backups are intentionally retained for recovery; remove them manually after verifying the new installation.`r`nA running process is not proof of Discord connectivity; check bot status and launcher logs."
+        Set-UpdateSettings -Enabled $autoUpdates -Repository $fresh.Destination -PreserveEnvironment $fresh.PreserveEnvironment
+        $environmentNote = 'The new .env keeps your previous file unchanged; any new options were added as commented-out lines.'
+        if ($null -eq $fresh.PreservedEnvironment) { $environmentNote = 'A new .env was created from the values entered in setup.' }
+        if (-not $fresh.PreserveEnvironment) { $environmentNote += ' Previous .env files were deleted without recovery copies.' }
+        return "Installed to $($fresh.Destination).`r`n$environmentNote`r`nRun at user sign-in: $($Plan.Options.RunOnLogon).`r`nOld credentials/database backups (sensitive): $work`r`nThese backups are intentionally retained for recovery; remove them manually after verifying the new installation.`r`nA running process is not proof of Discord connectivity; check bot status and launcher logs."
     } catch {
         throw "Installation stopped: $($_.Exception.Message)`r`nRecovery/prepared files: $work`r`nSome prior steps may have completed. No automatic rollback is claimed. Backups may contain credentials; keep them private."
     }
 }
 
-Export-ModuleMember -Function Get-InstallationPlan, Install-WindowsBot, New-InstallEnvironment, Read-InstallEnvironment
+Export-ModuleMember -Function Get-InstallationPlan, Install-WindowsBot, New-InstallEnvironment, Add-NewEnvironmentKeys

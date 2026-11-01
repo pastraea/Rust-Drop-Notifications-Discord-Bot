@@ -43,11 +43,14 @@ export async function runDropsCycle(deps: SchedulerDeps, options?: RunCycleOptio
  */
 export function startScheduler(deps: SchedulerDeps) {
     let cycleInFlight = false;
+    let currentCycle: Promise<void> = Promise.resolve();
+    let stopped = false;
     let lastCleanupAtMs = 0;
     const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
     const NOTIFICATION_RETENTION_DAYS = 60;
 
     const runCycleSafely = async (label: string) => {
+        if (stopped) return;
         if (cycleInFlight) {
             console.warn(`Skipping ${label} drop cycle because previous cycle is still running.`);
             return;
@@ -76,13 +79,26 @@ export function startScheduler(deps: SchedulerDeps) {
         }
     };
 
-    void runCycleSafely("initial").catch((error) => {
-        console.error("Initial drop cycle failed:", error);
-    });
-
-    return setInterval(() => {
-        void runCycleSafely("scheduled").catch((error) => {
-            console.error("Scheduled drop cycle failed:", error);
+    const launch = (label: string) => {
+        // A skipped overlapping run must not replace the promise of the cycle that is actually running.
+        if (cycleInFlight) {
+            void runCycleSafely(label);
+            return;
+        }
+        currentCycle = runCycleSafely(label).catch((error) => {
+            console.error(`${label[0].toUpperCase()}${label.slice(1)} drop cycle failed:`, error);
         });
-    }, deps.intervalMs);
+    };
+
+    launch("initial");
+    const timer = setInterval(() => launch("scheduled"), deps.intervalMs);
+
+    return {
+        /** Stops scheduling new cycles and resolves once any cycle already running has finished. */
+        async stop() {
+            stopped = true;
+            clearInterval(timer);
+            await currentCycle;
+        }
+    };
 }

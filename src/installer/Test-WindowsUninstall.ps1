@@ -165,6 +165,15 @@ try {
     Assert-True ([IO.File]::ReadAllText((Join-Path $backupDirectory 'bot.db-wal')).Trim() -eq 'wal-fixture') 'Reinstall backup lost WAL sidecar.'
     Assert-True (-not (Test-Path (Join-Path $repository '.env'))) 'Credentials not removed after consent.'
     Assert-True (-not (Test-Path (Join-Path $repository 'data\bot.db'))) 'Database not removed after consent.'
+    'recreated-credentials' | Set-Content (Join-Path $repository '.env')
+    'recreated-database' | Set-Content (Join-Path $repository 'data\bot.db')
+    $noEnvironmentBackup = Join-Path $temporary 'private-data-backup-without-env'
+    $manual = Get-BotInstallation $repository
+    Remove-BotInstallation -Plan $manual -DeleteData $true -DeleteFolder $false -BackupDataDirectory $noEnvironmentBackup `
+        -ProtectedRepository $PSScriptRoot -SkipEnvironmentBackup | Out-Null
+    Assert-True (-not (Test-Path (Join-Path $noEnvironmentBackup '.env'))) 'Opting out of .env preservation still left a recovery copy of credentials.'
+    Assert-True (Test-Path (Join-Path $noEnvironmentBackup 'bot.db')) 'Skipping the .env backup must not skip the database backup.'
+    Assert-True (-not (Test-Path (Join-Path $repository '.env'))) 'Credentials not deleted after explicit opt-out.'
     $manual = Get-BotInstallation $repository
     Remove-BotInstallation -Plan $manual -DeleteData $true -DeleteFolder $true -ProtectedRepository $PSScriptRoot | Out-Null
     Assert-True (-not (Test-Path $repository)) 'Confirmed old installation folder remains.'
@@ -452,7 +461,7 @@ try {
             try {
                 Assert-True ($setup.Title -eq 'Install Rust Drop Notifications Discord Bot') 'Install screen must use the requested product name.'
                 foreach ($name in @('Destination', 'BrowseDestination', 'Token', 'ClientId', 'GuildId', 'ReuseFolder',
-                    'ReuseConfiguration', 'ReuseDatabase', 'RunOnLogon', 'StartNow', 'RegisterCommands',
+                    'PreserveEnvironment', 'PreserveNote', 'ReuseDatabase', 'RunOnLogon', 'StartNow', 'RegisterCommands',
                     'DesktopShortcut', 'StartMenuShortcut', 'AllowNodeInstall', 'Cancel', 'ConfirmInstall')) {
                     Assert-True ($null -ne $setup.FindName($name)) "Missing install-screen control: $name"
                 }
@@ -460,6 +469,15 @@ try {
                 Assert-True $setup.FindName('Cancel').IsCancel 'Cancel must dismiss the install screen.'
                 Assert-True (-not $setup.FindName('AllowNodeInstall').IsChecked) 'Node installation must require consent.'
                 Assert-True (-not $setup.FindName('AutoUpdates').IsChecked) 'Automatic updates must require consent.'
+                Assert-True $setup.FindName('PreserveEnvironment').IsChecked '.env preservation must be on by default.'
+                Assert-True (-not $setup.FindName('Token').IsEnabled -and -not $setup.FindName('ClientId').IsEnabled -and -not $setup.FindName('GuildId').IsEnabled) 'Credential fields must be locked while an existing .env is preserved.'
+                $setup.FindName('PreserveEnvironment').IsChecked = $false
+                $setup.FindName('PreserveEnvironment').RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+                Assert-True ($setup.FindName('Token').IsEnabled -and $setup.FindName('GuildId').IsEnabled) 'Credential fields must unlock when preservation is turned off.'
+                Assert-True ($setup.FindName('PreserveNote').Text -match 'permanently deleted with no backup') 'Opting out must warn that the .env is deleted without a backup.'
+                $setup.FindName('PreserveEnvironment').IsChecked = $true
+                $setup.FindName('PreserveEnvironment').RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+                Assert-True (-not $setup.FindName('Token').IsEnabled) 'Credential fields must lock again when preservation is turned back on.'
                 Assert-True ($setup.FindName('ReuseFolder').Items.Count -eq 2) 'Reuse installation choices missing.'
             } finally { $setup.Close() }
         } finally {
