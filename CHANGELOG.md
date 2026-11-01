@@ -8,6 +8,29 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.4.3] - 2026-11-01
+
+### Security
+
+- Development dependencies: `glob` and `minimatch` (used by `c8`) are pinned through npm `overrides` to patched releases, resolving the four moderate advisories noted in 0.4.1 without downgrading `c8`. `npm audit` now reports no vulnerabilities.
+- Log output now masks the Discord token, the Twitch client secret, bearer tokens, Discord-token-shaped strings, and `client_secret`/`access_token` values.
+
+### Added
+
+- Leveled logging (`src/logger.ts`). All output goes through a scoped, timestamped logger instead of `console`. The new optional `LOG_LEVEL` setting accepts `debug`, `info` (default), `warn`, `error`, or `silent`, case-insensitive; invalid values stop the bot at startup with an explanation. The installer and launcher pass it through like the other settings.
+- Twitch provider tests for malformed payloads, the Helix fallback, token caching, and log redaction (`src/providers/twitch.fallback.test.ts`).
+- Tests for Tenor GIF resolution, caching, and download (`src/services/tenorMedia.test.ts`) and for the logger (`src/logger.test.ts`).
+
+### Changed
+
+- The Tenor GIF resolution and download code that was duplicated in the command handlers and the reminder service now lives in `src/services/tenorMedia.ts`. Commands still take the first GIF on the page so they answer quickly, and announcements still pick the largest variant of the page's own GIF.
+- Announcement GIF lookups are now cached for 10 minutes, like command lookups. Previously the result for each Tenor link, including a failed lookup, was kept until the bot restarted, so a link that failed once was never retried and a changed page was never re-read.
+- `@types/node` updated to 26.6.6.
+
+### Upgrade Notes
+
+- No database or Discord command changes. `LOG_LEVEL` is optional; existing configurations keep working and log at `info`.
+
 ## [0.4.2] - 2026-11-01
 
 ### Added

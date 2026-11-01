@@ -12,9 +12,10 @@ Track Rust drops from multiple providers, store campaign/user state, and send ti
 - Scheduler: `src/scheduler.ts`
 - Providers: `src/providers/twitch.ts`, `src/providers/kick.ts` (shared retrying HTTP helper in `src/providers/http.ts`)
 - Sync service: `src/services/dropService.ts`
-- Reminder service: `src/services/reminderService.ts` (Tenor URL helpers shared with the command handlers live in `src/services/tenor.ts`)
+- Reminder service: `src/services/reminderService.ts` (Tenor URL helpers shared with the command handlers live in `src/services/tenor.ts`, and Tenor GIF resolution and download in `src/services/tenorMedia.ts`)
 - Interaction handlers: `src/commands/handleInteraction.ts`
 - Persistence: `src/db.ts`
+- Logging: `src/logger.ts` (leveled, scoped, with secret redaction; level set by `LOG_LEVEL`)
 - Schema migrations and pre-upgrade backups: `src/migrations.ts`
 - Optional Windows launch-time updater: `src/installer/Invoke-Updater.ps1` and
   `src/installer/WindowsUpdate.psm1`, outside the bot runtime/scheduler.

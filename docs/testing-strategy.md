@@ -3,9 +3,11 @@
 ## Current Coverage
 
 Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`,
-Twitch campaign parsing in `src/providers/twitch.test.ts`, Kick API/Facepunch discovery in
+Twitch campaign parsing in `src/providers/twitch.test.ts` (malformed payloads, the Helix fallback, token caching
+and log redaction in `src/providers/twitch.fallback.test.ts`), Kick API/Facepunch discovery in
 `src/providers/kick.test.ts`, the shared retry helper in `src/providers/http.test.ts`, Tenor URL
-helpers in `src/services/tenor.test.ts`, database behavior in `src/db.test.ts` (alert preferences and
+helpers in `src/services/tenor.test.ts`, Tenor GIF resolution, caching and download in
+`src/services/tenorMedia.test.ts`, the logger in `src/logger.test.ts`, database behavior in `src/db.test.ts` (alert preferences and
 auto-ping, notification dedupe, retention pruning, campaign upsert/ending/queries, settings, custom
 GIFs, secrets, and watches), environment validation in
 `src/config.test.ts`, graceful shutdown ordering in `src/shutdown.test.ts`, scheduler
@@ -81,7 +83,7 @@ Covered areas:
 - command routing and validation
 - permission-sensitive command behavior
 - error reply fallback behavior
-- the GIF resolution/download and Tenor scraping paths in `handleInteraction.ts` and `reminderService.ts`
+- how `handleInteraction.ts` and `reminderService.ts` fall back when a GIF cannot be resolved or downloaded
 
 3. Integration tests
 
