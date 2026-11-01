@@ -6,8 +6,8 @@ Security fixes are released for the latest minor version only. Please upgrade be
 
 | Version | Supported |
 | --- | --- |
-| 0.4.x | Yes |
-| 0.3.x and earlier | No |
+| 0.4.1 and later 0.4.x | Yes |
+| 0.4.0 and earlier | No (0.4.0 and earlier bundle an `undici` release with known advisories; upgrade) |
 
 ## Reporting a Vulnerability
 
@@ -31,6 +31,6 @@ Never include a real `.env`, bot token, or database in a report. Redact secrets 
 ## Scope Notes
 
 - This project depends on third-party APIs and libraries.
-- Dependency updates are proposed weekly by Dependabot and reviewed before release. `npm audit` is run manually when preparing a release; findings in development-only tooling are tracked separately from runtime dependencies.
+- Dependency updates are proposed weekly by Dependabot (grouped by minor/patch) and reviewed before release. CI runs `npm audit --omit=dev --audit-level=high` on every push to `main` and pull request, and the release workflow repeats it before publishing, so a high-severity advisory in a runtime dependency blocks a release. Advisories in development-only tooling are reviewed at release time; the current ones (in `c8`'s `glob`/`minimatch`) do not ship with the bot.
 - The Windows setup EXE is currently unsigned. Automatic updates (opt-in) verify the release asset URL, size, and GitHub-published SHA-256 digest over HTTPS; this does not protect against a compromised repository or maintainer account.
 - Configuration (`.env`) and recovery backups can contain secrets. See [docs/data-privacy.md](docs/data-privacy.md).

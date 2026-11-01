@@ -6,7 +6,7 @@ import type { NormalizedDrop } from "../types.js";
  */
 
 const KICK_FACEPUNCH_URL = "https://kick.facepunch.com/";
-const COUNTDOWN_REGEX = /setupCountdown\(\s*['\"]\.campaign-(\d+)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
+const COUNTDOWN_REGEX = /setupCountdown\(\s*['"]\.campaign-(\d+)['"]\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
 const KICK_FACEPUNCH_TILE_URL = "https://kick.facepunch.com/?handler=Tile&hashedId=";
 const CHANNEL_CACHE_TTL_MS = 3 * 60 * 1000;
 
@@ -147,7 +147,7 @@ export class KickDropsProvider implements DropsProvider {
             new Set(
                 (campaign.channels ?? [])
                     .map((channel) => channel.slug ?? channel.username ?? channel.name)
-                    .filter((value): value is string => Boolean(value && value.trim()))
+                    .filter((value): value is string => Boolean(value?.trim()))
                     .map((value) => value.trim())
             )
         );
@@ -213,9 +213,9 @@ export class KickDropsProvider implements DropsProvider {
 
         const hashes = Array.from(
             new Set(
-                [...html.matchAll(/data-streamer-hash=\"([^\"]+)\"/gi)]
+                [...html.matchAll(/data-streamer-hash="([^"]+)"/gi)]
                     .map((match) => match[1])
-                    .filter((value): value is string => Boolean(value && value.trim()))
+                    .filter((value): value is string => Boolean(value?.trim()))
             )
         ).slice(0, 25);
 

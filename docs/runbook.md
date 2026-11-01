@@ -70,9 +70,33 @@ Actions:
 3. Backup DB file before manual recovery.
 4. If file corruption suspected, restore from backup and restart.
 
+### Schema Upgrade Errors
+
+- `The database schema is version N, but this bot only supports up to version M`: the database
+  was written by a newer bot version. Start the newer version, or restore an older backup.
+- `Database migration to version N failed and was rolled back`: the database was returned to its
+  previous version. The message names the pre-upgrade backup. Keep that file and report the error.
+- `Could not back up the database before upgrading it`: nothing was changed. Free disk space or fix
+  permissions on the `data` folder, then start the bot again.
+
+### Restoring an Automatic Backup
+
+Before any schema upgrade the bot copies an existing database to
+`data/backups/bot.db.<UTC timestamp>.v<from>-to-v<to>.bak` and keeps the newest three.
+
+1. Stop the bot.
+2. Keep the current `bot.db` aside (rename it), and delete `bot.db-wal` and `bot.db-shm` if present.
+3. Copy the chosen `.bak` file to `data/bot.db`.
+4. Start a bot version that supports that schema version (the `v<from>` in the file name).
+
+Backups contain the same user data as the database. They are removed by the Windows uninstaller's
+**delete data** option, and they are copied with the `data` folder during automatic updates.
+
 ## Backup Guidance
 
 - Snapshot the SQLite file during low activity windows.
+- Automatic pre-upgrade copies in `data/backups` protect against a bad upgrade only; they are not a
+  substitute for regular backups kept outside the installation folder.
 - Keep versioned backups and retention policy external to the app.
 - Validate restore procedure periodically.
 

@@ -12,6 +12,7 @@ Describe the change and why it is needed.
 
 ## Validation
 
+- [ ] `npm run lint`
 - [ ] `npm run build`
 - [ ] `npm test`
 - [ ] `npm run test:coverage` (when behavior changed)

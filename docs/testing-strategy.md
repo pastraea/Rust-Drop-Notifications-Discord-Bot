@@ -5,7 +5,9 @@
 Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`,
 Twitch campaign parsing in `src/providers/twitch.test.ts`, environment validation in
 `src/config.test.ts`, graceful shutdown ordering in `src/shutdown.test.ts`, and scheduler
-overlap/stop/failure behavior in `src/scheduler.test.ts`.
+overlap/stop/failure behavior in `src/scheduler.test.ts`, and schema migrations in
+`src/migrations.test.ts` (fresh, legacy, up-to-date, newer, failing, and backup-failure databases,
+rollback, backup contents and retention, and numbering rules). `npm run lint` runs Biome static analysis.
 `src/services/dropFlow.test.ts` exercises provider HTML through real SQLite and mocked
 Discord sends, without logging into Discord or making live network requests.
 
@@ -93,6 +95,7 @@ Bot build, tests, and coverage require Node.js 22.12+ and npm 10+.
 CI runs the build and tests on Node.js 22 and 24, with coverage on Node.js 22.
 Node.js 20 is not supported by the existing `better-sqlite3` 13 dependency.
 
+- `npm run lint`
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:installer` (Windows only; also runs in the separate Windows CI job)

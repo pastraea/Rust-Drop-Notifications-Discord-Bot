@@ -15,6 +15,7 @@ Track Rust drops from multiple providers, store campaign/user state, and send ti
 - Reminder service: `src/services/reminderService.ts`
 - Interaction handlers: `src/commands/handleInteraction.ts`
 - Persistence: `src/db.ts`
+- Schema migrations and pre-upgrade backups: `src/migrations.ts`
 - Optional Windows launch-time updater: `src/installer/Invoke-Updater.ps1` and
   `src/installer/WindowsUpdate.psm1`, outside the bot runtime/scheduler.
 
@@ -35,6 +36,21 @@ Activation failure restores the old tree; failed restoration blocks startup.
 Installer/removal/update mutations share a maintenance mutex. User credentials
 are never sent to GitHub, and updater checks do not use Discord credentials.
 
+## Database Migrations
+
+The schema version lives in SQLite's `user_version`. `BotDb` hands an ordered list of numbered
+migrations to `runMigrations` (`src/migrations.ts`) on startup:
+
+- Migration 1 is the original idempotent schema, so databases created before versioning
+  (version 0) upgrade in place.
+- Each migration runs in its own transaction together with its version bump, so a failure rolls
+  back and leaves the database at its previous version.
+- Before any pending migration on a database that already has tables, a consistent copy is written
+  with `VACUUM INTO` to `data/backups/<db>.<UTC timestamp>.v<from>-to-v<to>.bak` and the newest
+  three are kept. If the backup fails, nothing is migrated and the bot does not start.
+- A database whose version is newer than the bot knows is refused (`SchemaVersionError`).
+- New schema changes are appended as new numbered migrations; existing ones are never edited.
+
 ## Configuration Preservation
 
 The installer treats `.env` as user-owned data. With **Preserve my existing .env**
@@ -47,7 +63,7 @@ settings (see Windows Update Lifecycle) and defaults to on when absent or unread
 
 ## Runtime Flow
 
-1. Validate configuration (exit with a secret-safe message on invalid values), then open the SQLite database.
+1. Validate configuration (exit with a secret-safe message on invalid values), then open the SQLite database and apply any pending schema migrations (backing the database up first).
 2. Start Discord client.
 3. On scheduler cycle:
    - fetch normalized drops from providers

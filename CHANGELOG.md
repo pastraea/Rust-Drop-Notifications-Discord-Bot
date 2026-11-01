@@ -8,6 +8,38 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.4.1] - 2026-11-01
+
+### Security
+
+- Updated the `undici` dependency used by `discord.js` from 6.29.0 or earlier to 6.29.1, resolving eight advisories rated up to high severity (WebSocket and EventSource denial of service, TLS validation bypass, and response splitting). This was a lockfile update only. Four moderate advisories remain in `c8`'s development-only dependencies (`glob`/`minimatch`); they do not ship with the bot and have no non-breaking fix.
+
+### Added
+
+- Versioned database schema migrations. The schema version is stored in SQLite's `user_version`, each migration runs in its own transaction, and the existing schema becomes migration 1, so every existing database upgrades without data loss.
+- Automatic pre-upgrade database backups. Before any pending migration on an existing database, a consistent copy is written to `data/backups` (the newest three are kept). If the backup cannot be written, the database is left unchanged and the bot refuses to start with an explanation.
+- Newer-database protection: a database written by a newer bot version is refused with a clear message instead of being misread.
+- Release automation (`.github/workflows/release.yml`): pushing a `vX.Y.Z` tag runs lint, build, tests, the runtime dependency audit, and the Windows installer, packaging, and updater checks, then publishes the release with the single setup EXE and notes taken from this changelog. Nothing is published if any step fails.
+- `npm run lint` using Biome (lint only, no reformatting), an `.editorconfig`, and a runtime dependency audit (`npm audit --omit=dev --audit-level=high`) in CI.
+
+### Changed
+
+- Fixed upgrading databases whose `users` table predates the alert columns: the `users(auto_ping)` index was created before the column it indexes was added, so such a database failed to open. The index is now created after the column additions. Found by testing the new migration path against an old-style schema; earlier releases have the same ordering problem.
+- CI no longer runs twice for pull request branches: pushes are tested only on `main`, pull requests run on the PR, superseded PR runs are cancelled, and the workflow token is read-only.
+- Dependabot now groups npm minor/patch updates and GitHub Actions updates into single pull requests.
+- Uninstalling with data deletion also removes the bot's own automatic `bot.db.*.bak` backups in `data/backups`; other files in that folder are left alone.
+- Startup output no longer includes the dotenv banner.
+- `BotDb` closes the database file if opening it fails (a refused or failed migration), instead of leaving it locked.
+
+### Removed
+
+- Unused internal code: three unreferenced spelling-quiz sentence helpers and their constants, and an unused timed-alert label function.
+
+### Upgrade Notes
+
+- The first start after upgrading writes one backup of your existing database to `data/backups` and sets schema version 1. No action is needed.
+- Downgrading to a bot version older than 0.4.1 after upgrading is safe for data because the schema is unchanged, but those versions do not know about `data/backups`.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added

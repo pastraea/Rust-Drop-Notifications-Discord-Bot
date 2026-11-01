@@ -22,10 +22,10 @@ Thanks for contributing.
 
 1. Use Node.js 22.12 or newer and npm 10+.
 2. Install dependencies with `npm ci` (or `npm install` when changing dependencies).
-3. Validate build with `npm run build`.
+3. Run static analysis with `npm run lint` and validate the build with `npm run build`.
 4. Run tests with `npm test`.
 5. If you change the Windows installer, updater, or setup UI, also run `npm run test:installer` and `npm run test:updater` on Windows. They mock OS operations and use temporary folders.
-6. When changing behavior, add or update tests.
+6. When changing behavior, add or update tests. Database changes must be a new numbered migration in `src/db.ts` (never an edit to an existing one) with a test in `src/migrations.test.ts`.
 7. Never commit `.env`, tokens, or database files, and never paste them into issues or pull requests.
 
 ## Pull Request Expectations

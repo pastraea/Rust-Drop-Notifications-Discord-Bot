@@ -5,7 +5,7 @@ import { z } from "zod";
  * Environment configuration parsing and validation for runtime and deploy commands.
  */
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export const MIN_CHECK_INTERVAL_MS = 1000;
 export const MAX_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;

@@ -10,6 +10,7 @@ Discord bot that tracks Rust drops from Twitch and Kick providers, persists stat
 - Mock and live provider modes for local testing and production operation
 - Official Facepunch Twitch participation lists, with general and streamer-specific drops shown separately
 - Strict startup configuration validation with clear, secret-safe error messages
+- Versioned SQLite schema migrations with an automatic backup before every upgrade
 - Graceful shutdown that lets a running drop cycle finish and closes the database cleanly
 - Windows setup EXE with opt-in launch-time updates and a default-on **Preserve my existing .env** option, so reinstalls and updates never discard your configuration
 
@@ -373,6 +374,11 @@ Common issues and fixes:
 5. Database issues.
    - Confirm process can write to `DATABASE_PATH` directory.
    - Ensure file system permissions are correct.
+   - `The database schema is version N, but this bot only supports up to version M` means the
+     database was created by a newer bot version. Run the newer version, or restore a copy from
+     `data/backups` (see [docs/runbook.md](docs/runbook.md)).
+   - `Could not back up the database before upgrading it` means the pre-upgrade backup failed, so
+     nothing was changed. Free disk space or fix permissions on the `data` folder and start again.
 
 For operations-level response steps, see [docs/runbook.md](docs/runbook.md).
 
@@ -381,6 +387,7 @@ For operations-level response steps, see [docs/runbook.md](docs/runbook.md).
 Current commands:
 
 - `npm run build` to type-check and compile
+- `npm run lint` for static analysis (Biome; warnings fail the check)
 - `npm test` for unit tests
 - `npm run test:coverage` for coverage report output
 - `npm run test:installer` and `npm run test:updater` for the Windows installer, uninstaller,
@@ -388,7 +395,8 @@ Current commands:
 
 Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1),
 Twitch campaign parsing in [src/providers/twitch.test.ts](src/providers/twitch.test.ts),
-environment validation in [src/config.test.ts](src/config.test.ts), shutdown ordering in
+environment validation in [src/config.test.ts](src/config.test.ts), schema migrations and backups in
+[src/migrations.test.ts](src/migrations.test.ts), shutdown ordering in
 [src/shutdown.test.ts](src/shutdown.test.ts), and scheduler overlap/stop/failure handling in
 [src/scheduler.test.ts](src/scheduler.test.ts).
 The [drop flow tests](src/services/dropFlow.test.ts) exercise official campaign HTML

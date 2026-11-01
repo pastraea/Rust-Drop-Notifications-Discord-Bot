@@ -312,6 +312,21 @@ function Remove-BotInstallationCore {
             Assert-PlainPath $file
             if (Test-Path -LiteralPath $file -PathType Leaf) { Remove-Item -LiteralPath $file -Force }
         }
+        # Automatic pre-upgrade database backups hold the same data, so they are removed with it.
+        # Only the bot's own "<database>.*.bak" files are deleted; anything else in the folder is left alone.
+        $databasePath = $fresh.DataPaths[1]
+        $backupFolder = Join-Path (Split-Path $databasePath -Parent) 'backups'
+        if (Test-Path -LiteralPath $backupFolder -PathType Container) {
+            Assert-PlainPath $backupFolder
+            $databaseName = Split-Path $databasePath -Leaf
+            foreach ($item in @(Get-ChildItem -LiteralPath $backupFolder -File -Force)) {
+                if ($item.Name.StartsWith($databaseName + '.') -and $item.Name.EndsWith('.bak')) {
+                    Assert-PlainPath $item.FullName
+                    Remove-Item -LiteralPath $item.FullName -Force
+                }
+            }
+            if (@(Get-ChildItem -LiteralPath $backupFolder -Force).Count -eq 0) { Remove-Item -LiteralPath $backupFolder }
+        }
     }
     if ($DeleteFolder -and $fresh.FolderExists) {
         Assert-RemovableFolder $fresh.Repository $ProtectedRepository

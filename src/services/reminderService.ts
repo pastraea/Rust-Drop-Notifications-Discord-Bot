@@ -1,4 +1,4 @@
-﻿import { AttachmentBuilder, ChannelType, Client, TextChannel } from "discord.js";
+﻿import { AttachmentBuilder, ChannelType, type Client, type TextChannel } from "discord.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -105,7 +105,7 @@ function normalizeTenorViewUrl(url: string): string {
 
 /** Validates whether a URL matches the expected Tenor view URL shape. */
 function isValidTenorViewUrl(url: string): boolean {
-    return /^https:\/\/tenor\.com\/view\/[a-z0-9\-]+/i.test(url);
+    return /^https:\/\/tenor\.com\/view\/[a-z0-9-]+/i.test(url);
 }
 
 /** Decodes HTML entities encountered in scraped Tenor metadata. */
@@ -706,18 +706,6 @@ function getNotificationTypeForTimedAlert(alertType: TimedAlertType): string {
     }
 
     return "drop_1h";
-}
-
-function getTimedAlertLabel(alertType: TimedAlertType): string {
-    if (alertType === "alert_24h_6am") {
-        return "24h morning reminder";
-    }
-
-    if (alertType === "alert_12h_6pm") {
-        return "12h evening reminder";
-    }
-
-    return "1h reminder";
 }
 
 function getSnapshotHeading(kind: TimedAlertType | "checkdrops" | "live"): string {

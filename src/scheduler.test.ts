@@ -42,7 +42,9 @@ test("stop() waits for the running cycle and no further cycles start afterwards"
     assert.equal(fetches, 1, "overlapping ticks must be skipped while a cycle is running");
 
     let stopped = false;
-    const stopping = scheduler.stop().then(() => void (stopped = true));
+    const stopping = scheduler.stop().then(() => {
+        stopped = true;
+    });
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(stopped, false, "stop() must wait for the in-flight cycle");
 

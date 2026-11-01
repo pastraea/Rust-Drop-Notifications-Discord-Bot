@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
@@ -28,10 +28,7 @@ function createTestDb(t: TestContext, legacy = false): BotDb {
     const db = new BotDb(dbPath);
     t.after(() => {
         db.close();
-        for (const file of readdirSync(directory)) {
-            unlinkSync(path.join(directory, file));
-        }
-        rmdirSync(directory);
+        rmSync(directory, { recursive: true, force: true });
     });
     return db;
 }

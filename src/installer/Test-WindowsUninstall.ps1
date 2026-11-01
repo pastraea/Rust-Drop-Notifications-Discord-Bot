@@ -167,6 +167,10 @@ try {
     Assert-True (-not (Test-Path (Join-Path $repository 'data\bot.db'))) 'Database not removed after consent.'
     'recreated-credentials' | Set-Content (Join-Path $repository '.env')
     'recreated-database' | Set-Content (Join-Path $repository 'data\bot.db')
+    $automaticBackups = Join-Path $repository 'data\backups'
+    New-Item -ItemType Directory -Path $automaticBackups | Out-Null
+    'backup' | Set-Content (Join-Path $automaticBackups 'bot.db.20261101T051500Z.v1-to-v2.bak')
+    'someone elses file' | Set-Content (Join-Path $automaticBackups 'notes.txt')
     $noEnvironmentBackup = Join-Path $temporary 'private-data-backup-without-env'
     $manual = Get-BotInstallation $repository
     Remove-BotInstallation -Plan $manual -DeleteData $true -DeleteFolder $false -BackupDataDirectory $noEnvironmentBackup `
@@ -174,6 +178,10 @@ try {
     Assert-True (-not (Test-Path (Join-Path $noEnvironmentBackup '.env'))) 'Opting out of .env preservation still left a recovery copy of credentials.'
     Assert-True (Test-Path (Join-Path $noEnvironmentBackup 'bot.db')) 'Skipping the .env backup must not skip the database backup.'
     Assert-True (-not (Test-Path (Join-Path $repository '.env'))) 'Credentials not deleted after explicit opt-out.'
+    Assert-True (-not (Test-Path (Join-Path $automaticBackups 'bot.db.20261101T051500Z.v1-to-v2.bak'))) 'Deleting data left an automatic database backup behind.'
+    Assert-True (Test-Path (Join-Path $automaticBackups 'notes.txt')) 'Deleting data removed an unrelated file from the backups folder.'
+    Remove-Item -LiteralPath (Join-Path $automaticBackups 'notes.txt')
+    Remove-Item -LiteralPath $automaticBackups
     $manual = Get-BotInstallation $repository
     Remove-BotInstallation -Plan $manual -DeleteData $true -DeleteFolder $true -ProtectedRepository $PSScriptRoot | Out-Null
     Assert-True (-not (Test-Path $repository)) 'Confirmed old installation folder remains.'

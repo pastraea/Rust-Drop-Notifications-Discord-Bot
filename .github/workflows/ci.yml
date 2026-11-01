@@ -1,10 +1,20 @@
 name: CI
 
+# Pull requests are tested on the PR itself; pushes are tested only on main. This avoids running every
+# check twice for each PR branch.
 on:
   push:
     branches:
-      - "**"
+      - main
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   windows-uninstall:
@@ -48,6 +58,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        if: matrix.node-version == '22.x'
+        run: npm run lint
+
       - name: Build
         run: npm run build
 
@@ -64,3 +78,23 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Runtime (production) dependencies only; development-only tooling advisories are reviewed at release time.
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high

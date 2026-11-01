@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { runMigrations } from "./migrations.js";
 import type { Drop, NormalizedDrop, Platform, Watch } from "./types.js";
 import { TOTAL_SECRETS, type SecretKey } from "./services/secrets.js";
 
@@ -37,6 +38,21 @@ export interface SecretDiscoveryResult {
     isNew: boolean;
     foundCount: number;
     totalSecrets: number;
+}
+
+/** Raw `drops` row as returned by the camel-cased SELECT statements. */
+interface DropRow {
+    id: number;
+    platform: string;
+    externalId: string;
+    title: string;
+    channelsJson: string | null;
+    hasGeneralDrops: number | boolean;
+    game: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+    lastSeen: string;
 }
 
 /**
@@ -93,7 +109,23 @@ export class BotDb {
         fs.mkdirSync(path.dirname(fullPath), { recursive: true });
         this.db = new Database(fullPath);
         this.db.pragma("journal_mode = WAL");
-        this.init();
+        try {
+            runMigrations(
+                this.db,
+                [
+                    {
+                        version: 1,
+                        description: "Baseline schema (idempotent, so databases created before versioning upgrade cleanly)",
+                        up: () => this.applyBaselineSchema()
+                    }
+                ],
+                { filePath: fullPath }
+            );
+        } catch (error) {
+            // Do not leave the file locked when the database is refused or a migration fails.
+            this.db.close();
+            throw error;
+        }
         this.alertEnabledStatements = {
             alert_24h_6am: this.db.prepare("SELECT alert_24h_6am as enabled FROM users WHERE discord_user_id = ?"),
             alert_12h_6pm: this.db.prepare("SELECT alert_12h_6pm as enabled FROM users WHERE discord_user_id = ?"),
@@ -353,8 +385,12 @@ export class BotDb {
         });
     }
 
-    /** Creates base tables/indexes and performs additive schema migrations if needed. */
-    private init() {
+    /**
+     * Migration 1: creates base tables/indexes and applies the additive column migrations that existed
+     * before schema versioning. It is idempotent so it also upgrades unversioned (version 0) databases.
+     * Add later changes as new numbered migrations rather than editing this one.
+     */
+    private applyBaselineSchema() {
         this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         discord_user_id TEXT PRIMARY KEY,
@@ -443,8 +479,6 @@ export class BotDb {
                 ON drops(status, start_time);
             CREATE INDEX IF NOT EXISTS idx_drops_platform_status
                 ON drops(platform, status);
-            CREATE INDEX IF NOT EXISTS idx_users_auto_ping
-                ON users(auto_ping);
             CREATE INDEX IF NOT EXISTS idx_user_notifications_user_drop_type
                 ON user_notifications_sent(discord_user_id, drop_id, notification_type);
             CREATE INDEX IF NOT EXISTS idx_user_notifications_sent_at
@@ -481,6 +515,9 @@ export class BotDb {
         if (!hasAlertCheckdrops) {
             this.db.exec("ALTER TABLE users ADD COLUMN alert_checkdrops INTEGER NOT NULL DEFAULT 1");
         }
+
+        // Created after the column additions above: very old users tables do not have auto_ping yet.
+        this.db.exec("CREATE INDEX IF NOT EXISTS idx_users_auto_ping ON users(auto_ping)");
 
         const customGifColumns = this.db
             .prepare("PRAGMA table_info(custom_gifs)")
@@ -814,7 +851,7 @@ export class BotDb {
             );
 
         const row = this.hotStatements.selectDropByExternalId
-            .get(drop.platform, drop.externalId);
+            .get(drop.platform, drop.externalId) as DropRow;
 
         return this.mapDropRow(row);
     }
@@ -836,7 +873,7 @@ export class BotDb {
             }
         }
 
-        const rowByKey = new Map<string, any>();
+        const rowByKey = new Map<string, DropRow>();
         for (const [platform, externalIdsSet] of externalIdsByPlatform.entries()) {
             const externalIds = Array.from(externalIdsSet);
             if (externalIds.length === 0) {
@@ -844,7 +881,7 @@ export class BotDb {
             }
 
             const rows = this.getSelectDropsByPlatformStatement(externalIds.length)
-                .all(platform, ...externalIds) as Array<{ platform: string; externalId: string }>;
+                .all(platform, ...externalIds) as DropRow[];
 
             for (const row of rows) {
                 const key = `${String(row.platform)}:${String(row.externalId)}`;
@@ -855,7 +892,7 @@ export class BotDb {
         return drops.map((drop) => {
             const key = `${drop.platform}:${drop.externalId}`;
             const row = rowByKey.get(key) ?? this.hotStatements.selectDropByExternalId
-                .get(drop.platform, drop.externalId);
+                .get(drop.platform, drop.externalId) as DropRow;
             return this.mapDropRow(row);
         });
     }
@@ -872,7 +909,7 @@ export class BotDb {
             .run(platform, ...normalizedSeen);
     }
 
-    private mapDropRow(row: any): Drop {
+    private mapDropRow(row: DropRow): Drop {
         const parsedChannels = (() => {
             const rawChannelsJson = String(row?.channelsJson ?? "[]").trim();
             if (rawChannelsJson === "[]") {
@@ -908,7 +945,7 @@ export class BotDb {
 
     /** Legacy watch-based notification dedupe records. */
     getActiveDrops(): Drop[] {
-        const rows = this.hotStatements.getActiveDrops.all();
+        const rows = this.hotStatements.getActiveDrops.all() as DropRow[];
 
         return rows.map((row) => this.mapDropRow(row));
     }
@@ -916,7 +953,7 @@ export class BotDb {
     /** Omitting the horizon returns all published upcoming campaigns for manual snapshots. */
     getUpcomingDropsWithinHours(maxHours?: number): Drop[] {
         const rows = this.hotStatements.getUpcomingDropsWithinHours
-            .all(maxHours ?? null, maxHours ?? null);
+            .all(maxHours ?? null, maxHours ?? null) as DropRow[];
 
         return rows.map((row) => this.mapDropRow(row));
     }

@@ -37,7 +37,7 @@ export interface InteractionDeps {
     providers: DropsProvider[];
 }
 
-const TENOR_VIEW_URL_REGEX = /^https:\/\/tenor\.com\/view\/[a-z0-9\-]+/i;
+const TENOR_VIEW_URL_REGEX = /^https:\/\/tenor\.com\/view\/[a-z0-9-]+/i;
 const GIF_LIST_PAGE_SIZE = 5;
 const NO_CHEATING_GIF_VIEW_URL =
     "https://tenor.com/view/you-wouldn%27t-ratatouille-piracy-it%27s-a-crime-piracy-is-stealing-meme-gif-11554142448863112842";
@@ -68,29 +68,6 @@ const ALERT_TYPE_TOKEN_MAP = new Map<string, AlertType>([
     ["check", "alert_checkdrops"],
     ["manual", "alert_checkdrops"]
 ]);
-const VERB_LIKE_TOKENS = new Set([
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "being",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    "can",
-    "could",
-    "will",
-    "would",
-    "should",
-    "might",
-    "may"
-]);
-const VERB_SUFFIX_REGEX = /(?:ed|ing)$/;
 
 interface BeeQuizWord {
     word: string;
@@ -327,49 +304,6 @@ function getAcceptedSpellings(word: string): Set<string> {
     }
 
     return accepted;
-}
-
-/** Returns whether a normalized sentence includes a normalized target word. */
-function sentenceContainsWord(sentence: string, word: string): boolean {
-    return normalizeWord(sentence).includes(normalizeWord(word));
-}
-
-/** Escapes a string for safe interpolation inside regex sources. */
-function escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Validates that a user sentence uses the target word with enough context. */
-function evaluateSentenceUsage(sentence: string, word: string): { valid: boolean; reason?: string } {
-    const trimmed = sentence.trim();
-    const tokens = trimmed.match(/[a-zA-Z']+/g) ?? [];
-    const normalizedTarget = normalizeWord(word);
-    const normalizedTokens = tokens.map((token) => normalizeWord(token)).filter((token) => token.length > 0);
-    const hasExactToken = normalizedTokens.includes(normalizedTarget);
-
-    if (!hasExactToken) {
-        return { valid: false, reason: "Your sentence must include the exact target word." };
-    }
-
-    if (tokens.length < 6) {
-        return { valid: false, reason: "Your sentence is too short. Use a full sentence with context." };
-    }
-
-    const nonTargetTokens = normalizedTokens.filter((token) => token !== normalizedTarget);
-    if (nonTargetTokens.length < 3) {
-        return { valid: false, reason: "Add more context words around the target word." };
-    }
-
-    const lowerTokens = tokens.map((token) => token.toLowerCase());
-    const hasVerbLikeWord = lowerTokens.some((token) =>
-        VERB_LIKE_TOKENS.has(token) || VERB_SUFFIX_REGEX.test(token)
-    );
-
-    if (!hasVerbLikeWord) {
-        return { valid: false, reason: "Your sentence needs a verb/action to read like a real sentence." };
-    }
-
-    return { valid: true };
 }
 
 /** Builds a temporary text-to-speech attachment for spelling quiz prompts. */

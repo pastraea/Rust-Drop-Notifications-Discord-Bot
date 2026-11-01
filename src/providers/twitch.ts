@@ -12,7 +12,7 @@ interface TwitchProviderOptions {
 }
 
 const TWITCH_FACEPUNCH_URL = "https://twitch.facepunch.com/";
-const COUNTDOWN_REGEX = /setupCountdown\(\s*['\"]\.campaign-(\d+)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
+const COUNTDOWN_REGEX = /setupCountdown\(\s*['"]\.campaign-(\d+)['"]\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
 
 interface TwitchAppTokenResponse {
     access_token: string;
@@ -226,7 +226,7 @@ export class TwitchDropsProvider implements DropsProvider {
                             channel.display_name ??
                             channel.name
                     )
-                    .filter((value): value is string => Boolean(value && value.trim()))
+                    .filter((value): value is string => Boolean(value?.trim()))
                     .map((value) => value.trim())
             )
         );

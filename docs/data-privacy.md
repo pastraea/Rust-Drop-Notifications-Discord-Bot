@@ -16,6 +16,10 @@ No passwords or OAuth refresh tokens are persisted by the app.
 
 - Primary datastore is the SQLite file at `DATABASE_PATH`.
 - Default path: `./data/bot.db`.
+- Before a schema upgrade, the bot writes a copy of an existing database to `data/backups`
+  (the newest three are kept). These copies contain the same user data as the database (Discord
+  user IDs, alert preferences, custom GIF links). The Windows uninstaller's delete-data option
+  removes them; otherwise delete the folder yourself if you no longer need them.
 - Optional Windows update preferences (automatic-update flag, installation path, and
   the Preserve .env flag), cached
   setup executables, and a bounded diagnostic log are stored under the current

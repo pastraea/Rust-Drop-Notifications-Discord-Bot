@@ -1,0 +1,121 @@
+name: Release
+
+# Publishes a GitHub release when a version tag such as v0.4.1 is pushed. Everything the release process
+# in VERSIONING.md validates by hand runs here first, and nothing is published if any step fails.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Verify tag, package version, and changelog agree
+        id: meta
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($packageVersion -ne $version) { throw "Tag $env:TAG does not match package.json version $packageVersion." }
+          $lockVersion = (Get-Content package-lock.json -Raw | ConvertFrom-Json).version
+          if ($lockVersion -ne $version) { throw "Tag $env:TAG does not match package-lock.json version $lockVersion." }
+          if (-not (Select-String -Path CHANGELOG.md -Pattern ('^## \[' + [regex]::Escape($version) + '\] - \d{4}-\d{2}-\d{2}') -Quiet)) {
+            throw "CHANGELOG.md has no dated '## [$version]' section."
+          }
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) { throw "A release for $env:TAG already exists. Edit or delete it manually before re-running." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Test Windows installer and uninstaller safeguards
+        shell: powershell
+        run: npm run test:installer
+
+      - name: Build and test standalone Windows executable
+        shell: powershell
+        run: .\src\installer\Test-Executable.ps1
+
+      # Runs after the executable exists so its embedded-payload checks are included.
+      - name: Test isolated launch-time updates
+        shell: powershell
+        run: npm run test:updater
+
+      - name: Verify the release asset
+        id: asset
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $expected = "Rust-Drop-Notifications-Discord-Bot-Setup-$env:VERSION.exe"
+          $files = @(Get-ChildItem artifacts -Filter '*.exe' | Where-Object { $_.Name -eq $expected })
+          if ($files.Count -ne 1) { throw "Expected exactly one $expected in artifacts." }
+          # The updater accepts exactly one asset, so nothing else may be attached.
+          "path=$($files[0].FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare release notes from the changelog
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          $lines = Get-Content CHANGELOG.md
+          $heading = '^## \[' + [regex]::Escape($env:VERSION) + '\]'
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match $heading) { $start = $i + 1; break } }
+          $body = @()
+          for ($i = $start; $i -lt $lines.Count -and $lines[$i] -notmatch '^## \['; $i++) { $body += $lines[$i] }
+          $notes = ($body -join "`n").Trim()
+          if (-not $notes) { throw "The changelog section for $env:VERSION is empty." }
+          $notes += "`n`n## Important notes`nDownload the setup EXE below. It opens without Node.js/npm or a repository checkout. The EXE remains **unsigned** with **studio bijou** company metadata, so Windows may show unknown-publisher or SmartScreen warnings. Installations with automatic updates enabled pick this release up on their next launch."
+          $notes += "`n`n## Validation`nLint, build, tests, runtime dependency audit, Windows installer/uninstaller, executable packaging, and updater checks passed in [this workflow run]($env:RUN_URL) before publishing."
+          [IO.File]::WriteAllText((Join-Path $PWD 'release-notes.md'), $notes)
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          ASSET: ${{ steps.asset.outputs.path }}
+        run: |
+          # The release title is the annotated tag's subject line when it has one, otherwise the tag name.
+          git fetch --force origin "+refs/tags/$($env:TAG):refs/tags/$($env:TAG)"
+          $title = (git for-each-ref "refs/tags/$env:TAG" --format='%(contents:subject)').Trim()
+          if (-not $title) { $title = $env:TAG }
+          gh release create $env:TAG $env:ASSET --title $title --notes-file release-notes.md --verify-tag --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }
