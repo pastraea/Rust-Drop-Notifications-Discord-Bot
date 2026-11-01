@@ -1,4 +1,4 @@
-﻿import { AttachmentBuilder, ChannelType, type Client, type TextChannel } from "discord.js";
+import { AttachmentBuilder, ChannelType, type Client, type TextChannel } from "discord.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -15,10 +15,6 @@ import {
     RARE_BEE_GIF_CHANCE,
     RARE_BEE_GIF_VIEW_URL
 } from "./rustGifAllowlist.js";
-
-/**
- * Reminder pipeline: computes due alert windows, builds snapshots, and sends announcements.
- */
 
 /**
  * Reminder/announcement service: builds snapshot messages, resolves GIF media, and dispatches alerts.
