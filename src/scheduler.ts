@@ -3,6 +3,9 @@ import type { BotDb } from "./db.js";
 import type { DropsProvider } from "./providers/base.js";
 import { syncDrops } from "./services/dropService.js";
 import { sendActiveDropReminders } from "./services/reminderService.js";
+import { logger } from "./logger.js";
+
+const log = logger.child("scheduler");
 
 /**
  * Scheduler orchestration for syncing drops and sending reminder announcements.
@@ -52,7 +55,7 @@ export function startScheduler(deps: SchedulerDeps) {
     const runCycleSafely = async (label: string) => {
         if (stopped) return;
         if (cycleInFlight) {
-            console.warn(`Skipping ${label} drop cycle because previous cycle is still running.`);
+            log.warn(`Skipping ${label} drop cycle because previous cycle is still running.`);
             return;
         }
 
@@ -66,14 +69,14 @@ export function startScheduler(deps: SchedulerDeps) {
                 lastCleanupAtMs = now;
                 const pruned = deps.db.pruneOldNotificationHistory(NOTIFICATION_RETENTION_DAYS);
                 if (pruned.userNotificationsDeleted > 0 || pruned.watchNotificationsDeleted > 0) {
-                    console.log(
+                    log.info(
                         `Pruned old notifications: user=${pruned.userNotificationsDeleted}, watch=${pruned.watchNotificationsDeleted}`
                     );
                 }
             }
 
             const durationMs = Date.now() - startMs;
-            console.log(`Drop cycle (${label}) completed in ${durationMs}ms.`);
+            log.info(`Drop cycle (${label}) completed in ${durationMs}ms.`);
         } finally {
             cycleInFlight = false;
         }
@@ -86,7 +89,7 @@ export function startScheduler(deps: SchedulerDeps) {
             return;
         }
         currentCycle = runCycleSafely(label).catch((error) => {
-            console.error(`${label[0].toUpperCase()}${label.slice(1)} drop cycle failed:`, error);
+            log.error(`${label[0].toUpperCase()}${label.slice(1)} drop cycle failed:`, error);
         });
     };
 

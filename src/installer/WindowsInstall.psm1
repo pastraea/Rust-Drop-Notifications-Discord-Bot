@@ -25,7 +25,7 @@ function Set-PrivateInstallDirectory([string]$Path) {
 
 function Invoke-InstallCommand([string]$Executable, [string[]]$Arguments, [string]$Directory, [string]$Label) {
     $environmentKeys = @('DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID', 'DISCORD_PUBLIC_KEY',
-        'DATABASE_PATH', 'TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET', 'TWITCH_MOCK_DROPS', 'KICK_MOCK_DROPS', 'CHECK_INTERVAL_MS')
+        'DATABASE_PATH', 'TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET', 'TWITCH_MOCK_DROPS', 'KICK_MOCK_DROPS', 'CHECK_INTERVAL_MS', 'LOG_LEVEL')
     $previous = @{}
     foreach ($key in $environmentKeys) {
         $previous[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
@@ -309,7 +309,7 @@ function Write-InstallLauncher([string]$Destination, $Tools) {
         '$ErrorActionPreference = "Stop"'
         "Set-Location `"$Destination`""
         "`$env:PATH = '$escaped;' + `$env:PATH"
-        'foreach ($key in @("DISCORD_TOKEN","DISCORD_CLIENT_ID","DISCORD_GUILD_ID","DISCORD_PUBLIC_KEY","DATABASE_PATH","TWITCH_CLIENT_ID","TWITCH_CLIENT_SECRET","TWITCH_MOCK_DROPS","KICK_MOCK_DROPS","CHECK_INTERVAL_MS")) { [Environment]::SetEnvironmentVariable($key, $null, "Process") }'
+        'foreach ($key in @("DISCORD_TOKEN","DISCORD_CLIENT_ID","DISCORD_GUILD_ID","DISCORD_PUBLIC_KEY","DATABASE_PATH","TWITCH_CLIENT_ID","TWITCH_CLIENT_SECRET","TWITCH_MOCK_DROPS","KICK_MOCK_DROPS","CHECK_INTERVAL_MS","LOG_LEVEL")) { [Environment]::SetEnvironmentVariable($key, $null, "Process") }'
         '$mutex = New-Object Threading.Mutex($false, "Local\RustDropsBot")'
         'if (-not $mutex.WaitOne(0)) { $mutex.Dispose(); exit 0 }'
         'try {'

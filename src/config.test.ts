@@ -70,6 +70,19 @@ test("validation errors never echo configuration values", () => {
     if (!result.ok) assert.doesNotMatch(JSON.stringify(result.errors), /super-secret-token|not-a-number/);
 });
 
+test("LOG_LEVEL defaults to info, is case-insensitive, and rejects unknown levels", () => {
+    assert.equal(dataOf(runtime()).LOG_LEVEL, "info");
+    assert.equal(dataOf(runtime({ LOG_LEVEL: "" })).LOG_LEVEL, "info");
+    assert.equal(dataOf(runtime({ LOG_LEVEL: " DEBUG " })).LOG_LEVEL, "debug");
+    for (const level of ["debug", "info", "warn", "error", "silent"]) {
+        assert.equal(dataOf(runtime({ LOG_LEVEL: level })).LOG_LEVEL, level);
+    }
+
+    const result = runtime({ LOG_LEVEL: "verbose" });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.ok(result.errors.LOG_LEVEL?.some((message) => message.includes("debug, info, warn, error, silent")));
+});
+
 test("deploy configuration additionally requires client and guild IDs", () => {
     assert.equal(validateDeployEnv(baseEnv).ok, false);
     assert.equal(validateDeployEnv({ ...baseEnv, DISCORD_CLIENT_ID: "1", DISCORD_GUILD_ID: "2" }).ok, true);

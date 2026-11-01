@@ -1,5 +1,6 @@
 import { REST, Routes } from "discord.js";
 import { getDeployConfig } from "../config.js";
+import { logger } from "../logger.js";
 import { commandDefinitions } from "./definitions.js";
 
 /**
@@ -7,6 +8,10 @@ import { commandDefinitions } from "./definitions.js";
  */
 
 const deployConfig = getDeployConfig();
+logger.setLevel(deployConfig.LOG_LEVEL);
+logger.addSecret(deployConfig.DISCORD_TOKEN);
+logger.addSecret(deployConfig.TWITCH_CLIENT_SECRET);
+const log = logger.child("commands");
 
 /** Registers all slash command definitions to the configured guild. */
 async function registerCommands() {
@@ -20,10 +25,10 @@ async function registerCommands() {
         }
     );
 
-    console.log(`Registered ${body.length} command(s).`);
+    log.info(`Registered ${body.length} command(s).`);
 }
 
 registerCommands().catch((error) => {
-    console.error("Failed to register commands:", error);
+    log.error("Failed to register commands:", error);
     process.exit(1);
 });

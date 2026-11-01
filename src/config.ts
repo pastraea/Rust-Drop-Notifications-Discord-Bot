@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { z } from "zod";
+import { LOG_LEVEL_SETTINGS, type LogLevelSetting, logger } from "./logger.js";
 
 /**
  * Environment configuration parsing and validation for runtime and deploy commands.
@@ -55,11 +56,25 @@ const checkInterval = z.preprocess(
         })
 );
 
+const logLevel = z.preprocess(
+    blankAsUnset,
+    z
+        .string()
+        .default("info")
+        .transform((value, ctx): LogLevelSetting => {
+            const normalized = value.trim().toLowerCase();
+            if ((LOG_LEVEL_SETTINGS as readonly string[]).includes(normalized)) return normalized as LogLevelSetting;
+            ctx.addIssue({ code: "custom", message: `Must be one of: ${LOG_LEVEL_SETTINGS.join(", ")}.` });
+            return z.NEVER;
+        })
+);
+
 const BaseEnvSchema = z.object({
     DISCORD_TOKEN: z.string().min(1),
     DISCORD_PUBLIC_KEY: z.string().optional(),
     DATABASE_PATH: z.preprocess(blankAsUnset, z.string().default("./data/bot.db")),
     CHECK_INTERVAL_MS: checkInterval,
+    LOG_LEVEL: logLevel,
     TWITCH_CLIENT_ID: z.string().optional(),
     TWITCH_CLIENT_SECRET: z.string().optional(),
     TWITCH_MOCK_DROPS: booleanFlag,
@@ -93,7 +108,7 @@ export function validateDeployEnv(env: NodeJS.ProcessEnv) {
 function parseEnv<T>(result: ConfigResult<T>, context: string): T {
     if (!result.ok) {
         // Only field names and validation messages are logged, never values, so secrets stay out of logs.
-        console.error(`${context}: invalid environment configuration`, result.errors);
+        logger.child("config").error(`${context}: invalid environment configuration`, result.errors);
         process.exit(1);
     }
 

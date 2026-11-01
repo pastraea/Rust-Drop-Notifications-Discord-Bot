@@ -1,6 +1,9 @@
 import type { DropsProvider } from "./base.js";
 import { fetchWithRetries } from "./http.js";
+import { logger } from "../logger.js";
 import type { NormalizedDrop } from "../types.js";
+
+const log = logger.child("twitch");
 
 /**
  * Twitch drops provider using official Facepunch campaign details with a Helix fallback.
@@ -75,14 +78,14 @@ export class TwitchDropsProvider implements DropsProvider {
             this.sourceStatus = "live (Facepunch campaign dates and participating channels)";
             return drops;
         } catch (error) {
-            console.warn("Facepunch campaign fetch failed; trying Twitch Helix:", error);
+            log.warn("Facepunch campaign fetch failed; trying Twitch Helix:", error);
             const apiDrops = await this.fetchApiDrops();
             if (apiDrops.length > 0) {
                 this.sourceStatus = "live fallback (Twitch Helix API)";
                 return apiDrops;
             }
             this.sourceStatus = "error (provider fetch failed)";
-            console.error("Failed to fetch Twitch drops:", error);
+            log.error("Failed to fetch Twitch drops:", error);
             throw error;
         }
     }
@@ -97,7 +100,7 @@ export class TwitchDropsProvider implements DropsProvider {
             this.sourceStatus = "live fallback (missing Twitch API credentials)";
             if (!this.hasWarnedMissingCreds) {
                 this.hasWarnedMissingCreds = true;
-                console.warn(
+                log.warn(
                     "TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET not set. Twitch API fallback is unavailable."
                 );
             }
@@ -119,7 +122,7 @@ export class TwitchDropsProvider implements DropsProvider {
             const drops = response.data.map((campaign) => this.toNormalizedDropFromApi(campaign));
             return drops.filter((drop) => drop.status !== "ended");
         } catch (error) {
-            console.warn("Twitch Helix fallback failed:", error);
+            log.warn("Twitch Helix fallback failed:", error);
             return [];
         }
     }

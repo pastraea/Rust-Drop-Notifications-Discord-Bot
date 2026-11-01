@@ -6,6 +6,7 @@ import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import { GifCodec } from "gifwrap";
 import type { BotDb, TimedAlertType } from "../db.js";
+import { logger } from "../logger.js";
 import { decodeHtmlEntities, isValidTenorViewUrl, normalizeTenorViewUrl } from "./tenor.js";
 import { getChannelsSummaryForDrop, getDropChannelConfidence, hasListedDropChannels } from "./announcementTargets.js";
 import {
@@ -61,6 +62,7 @@ const MIN_GIF_WIDTH = 560;
 const MAX_GIF_UPSCALE_FACTOR = 2;
 const GIF_UPSCALE_TIMEOUT_MS = 12000;
 const PERF_LOG_ENABLED = process.env.RUST_DROPS_PERF_LOG === "1";
+const perfLog = logger.child("perf");
 const HOUR_MS = 60 * 60 * 1000;
 
 const tenorMediaCache = new Map<string, string | null>();
@@ -85,7 +87,7 @@ function logPerfSegment(name: string, startMs: number): void {
     }
 
     const durationMs = nowMs() - startMs;
-    console.log(`[perf] ${name}: ${durationMs.toFixed(2)}ms`);
+    perfLog.info(`${name}: ${durationMs.toFixed(2)}ms`);
 }
 
 /** Returns a shuffled copy using Fisher-Yates in-place permutation. */

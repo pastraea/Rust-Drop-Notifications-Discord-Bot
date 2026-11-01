@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
+import { logger } from "./logger.js";
 
 /**
  * Versioned SQLite schema migrations. The applied version is stored in SQLite's `user_version`
@@ -116,7 +117,7 @@ function backupDatabase(db: Database.Database, filePath: string, from: number, t
  */
 export function runMigrations(db: Database.Database, migrations: Migration[], options: MigrationOptions = {}): MigrationResult {
     validateMigrations(migrations);
-    const log = options.log ?? ((message: string) => console.log(message));
+    const log = options.log ?? ((message: string) => logger.child("database").info(message));
     const latest = migrations.length;
     const from = getSchemaVersion(db);
 

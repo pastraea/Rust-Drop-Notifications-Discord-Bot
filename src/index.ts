@@ -11,12 +11,17 @@ import { TwitchDropsProvider } from "./providers/twitch.js";
 import type { DropsProvider } from "./providers/base.js";
 import { startScheduler } from "./scheduler.js";
 import { createShutdown } from "./shutdown.js";
+import { logger } from "./logger.js";
 
 /**
  * Bot entrypoint: bootstraps runtime config, providers, interaction handlers, and scheduler.
  */
 
 const config = getRuntimeConfig();
+logger.setLevel(config.LOG_LEVEL);
+logger.addSecret(config.DISCORD_TOKEN);
+logger.addSecret(config.TWITCH_CLIENT_SECRET);
+const log = logger.child("bot");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const db = new BotDb(config.DATABASE_PATH);
@@ -36,11 +41,11 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => void shutdown(signal));
 }
 process.on("unhandledRejection", (reason) => {
-    console.error("Unhandled promise rejection:", reason);
+    log.error("Unhandled promise rejection:", reason);
     void shutdown("unhandledRejection", 1);
 });
 process.on("uncaughtException", (error) => {
-    console.error("Uncaught exception:", error);
+    log.error("Uncaught exception:", error);
     void shutdown("uncaughtException", 1);
 });
 const providers = [
@@ -53,8 +58,8 @@ const providers = [
 ] as unknown as DropsProvider[];
 
 client.once(Events.ClientReady, (readyClient) => {
-    console.log(`Logged in as ${readyClient.user.tag}`);
-    console.log(
+    log.info(`Logged in as ${readyClient.user.tag}`);
+    log.info(
         `Drops providers mode: twitch=${config.TWITCH_MOCK_DROPS ? "mock" : "live"}, kick=${config.KICK_MOCK_DROPS ? "mock" : "live"
         }`
     );
@@ -87,7 +92,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await handleModalSubmitInteraction(interaction, { db });
         }
     } catch (error) {
-        console.error("Command handling failed:", error);
+        log.error("Command handling failed:", error);
 
         try {
             if (interaction.isRepliable()) {
@@ -105,12 +110,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 });
             }
         } catch (responseError) {
-            console.error("Failed to send command error response:", responseError);
+            log.error("Failed to send command error response:", responseError);
         }
     }
 });
 
 client.login(config.DISCORD_TOKEN).catch((error) => {
-    console.error("Discord login failed:", error);
+    log.error("Discord login failed:", error);
     void shutdown("login failure", 1);
 });

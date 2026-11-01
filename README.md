@@ -326,6 +326,7 @@ SQLite WAL backup is also tested on temporary data.
 | `DISCORD_GUILD_ID` | For deploy script | Target guild for command registration |
 | `DATABASE_PATH` | Optional | SQLite file path (`./data/bot.db` default; blank uses the default) |
 | `CHECK_INTERVAL_MS` | Optional | Scheduler interval in whole milliseconds, `1000`-`86400000` (`300000` default; blank uses the default) |
+| `LOG_LEVEL` | Optional | Log verbosity: `debug`, `info`, `warn`, `error`, or `silent` (`info` default; case-insensitive) |
 | `TWITCH_MOCK_DROPS` | Optional | Use mock Twitch data: `true`/`false` (also `1`/`0`, `yes`/`no`, `on`/`off`; blank means `false`) |
 | `KICK_MOCK_DROPS` | Optional | Use mock Kick data (same accepted values) |
 

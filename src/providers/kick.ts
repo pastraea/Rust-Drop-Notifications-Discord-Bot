@@ -1,6 +1,9 @@
 import type { DropsProvider } from "./base.js";
 import { fetchWithRetries } from "./http.js";
+import { logger } from "../logger.js";
 import type { NormalizedDrop } from "../types.js";
+
+const log = logger.child("kick");
 
 /**
  * Kick drops provider with API-first fetch and Facepunch fallback discovery.
@@ -69,7 +72,7 @@ export class KickDropsProvider implements DropsProvider {
             return countdownDrops.map((drop) => ({ ...drop, channels }));
         } catch (error) {
             this.sourceStatus = "error (provider fetch failed)";
-            console.error("Failed to fetch Kick drops:", error);
+            log.error("Failed to fetch Kick drops:", error);
             return [];
         }
     }

@@ -1,3 +1,5 @@
+import { logger } from "./logger.js";
+
 /**
  * Ordered, idempotent graceful shutdown used by the bot entrypoint.
  */
@@ -22,8 +24,8 @@ export interface ShutdownOptions {
  * already in progress are ignored.
  */
 export function createShutdown(options: ShutdownOptions) {
-    const log = options.log ?? ((message: string) => console.log(message));
-    const logError = options.logError ?? ((message: string, error: unknown) => console.error(message, error));
+    const log = options.log ?? ((message: string) => logger.child("shutdown").info(message));
+    const logError = options.logError ?? ((message: string, error: unknown) => logger.child("shutdown").error(message, error));
     let started = false;
 
     return async function shutdown(reason: string, exitCode = 0): Promise<void> {
