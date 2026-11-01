@@ -30,15 +30,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = $env:TAG.TrimStart('v')
-          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          # Node is used because ConvertFrom-Json rejects package-lock.json (it has an empty-named "packages" key).
+          $packageVersion = (node -p "require('./package.json').version").Trim()
           if ($packageVersion -ne $version) { throw "Tag $env:TAG does not match package.json version $packageVersion." }
-          $lockVersion = (Get-Content package-lock.json -Raw | ConvertFrom-Json).version
+          $lockVersion = (node -p "require('./package-lock.json').version").Trim()
           if ($lockVersion -ne $version) { throw "Tag $env:TAG does not match package-lock.json version $lockVersion." }
           if (-not (Select-String -Path CHANGELOG.md -Pattern ('^## \[' + [regex]::Escape($version) + '\] - \d{4}-\d{2}-\d{2}') -Quiet)) {
             throw "CHANGELOG.md has no dated '## [$version]' section."
           }
           gh release view $env:TAG *> $null
-          if ($LASTEXITCODE -eq 0) { throw "A release for $env:TAG already exists. Edit or delete it manually before re-running." }
+          $releaseExists = ($LASTEXITCODE -eq 0)
+          # "Not found" is the expected result; clear it so the step does not inherit a failing exit code.
+          $global:LASTEXITCODE = 0
+          if ($releaseExists) { throw "A release for $env:TAG already exists. Edit or delete it manually before re-running." }
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Set up Node.js
