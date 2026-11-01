@@ -8,6 +8,12 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.3.2] - 2026-11-01
+
+### Changed
+
+- Updated `dotenv` from 18.0.8 to 18.0.9.
+
 ## [0.3.1] - 2026-10-23
 
 ### Changed
