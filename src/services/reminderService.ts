@@ -7,7 +7,8 @@ import ffmpegPath from "ffmpeg-static";
 import { GifCodec } from "gifwrap";
 import type { BotDb, TimedAlertType } from "../db.js";
 import { logger } from "../logger.js";
-import { decodeHtmlEntities, isValidTenorViewUrl, normalizeTenorViewUrl } from "./tenor.js";
+import { isValidTenorViewUrl, normalizeTenorViewUrl } from "./tenor.js";
+import { downloadMedia, tenorMedia } from "./tenorMedia.js";
 import { getChannelsSummaryForDrop, getDropChannelConfidence, hasListedDropChannels } from "./announcementTargets.js";
 import {
     APPROVED_RUST_GIF_VIEW_URLS,
@@ -53,11 +54,7 @@ const SYDNEY_CLOCK_FORMATTER = new Intl.DateTimeFormat("en-AU", {
     hour12: false
 });
 const MAX_GIF_RESOLVE_ATTEMPTS = 4;
-const TENOR_VIEW_FETCH_TIMEOUT_MS = 2500;
 const GIF_DOWNLOAD_TIMEOUT_MS = 3000;
-const GIF_PROBE_TIMEOUT_MS = 1500;
-const GIF_PROBE_CACHE_TTL_MS = 10 * 60 * 1000;
-const GIF_PROBE_LIMIT = 8;
 const MIN_GIF_WIDTH = 560;
 const MAX_GIF_UPSCALE_FACTOR = 2;
 const GIF_UPSCALE_TIMEOUT_MS = 12000;
@@ -65,8 +62,6 @@ const PERF_LOG_ENABLED = process.env.RUST_DROPS_PERF_LOG === "1";
 const perfLog = logger.child("perf");
 const HOUR_MS = 60 * 60 * 1000;
 
-const tenorMediaCache = new Map<string, string | null>();
-const gifContentLengthCache = new Map<string, { length: number; expiresAt: number }>();
 const recentGifHistory: string[] = [];
 const recentGifHistorySet = new Set<string>();
 const RECENT_GIF_HISTORY_LIMIT = 25;
@@ -99,184 +94,6 @@ function shuffledCopy<T>(items: T[]): T[] {
     }
 
     return copy;
-}
-
-/** Extracts Tenor media token segment from a direct media URL. */
-function getMediaToken(url: string): string | undefined {
-    const match = url.match(/https:\/\/media(?:1)?\.tenor\.com\/(?:m\/)?([^/]+)\//i);
-    return match?.[1];
-}
-
-/** Normalizes a Tenor media token to its base id for variant matching. */
-function getMediaBaseId(token: string): string {
-    return token.replace(/AAA[A-Za-z0-9]+$/i, "");
-}
-
-/** Scores media URLs using heuristics that prefer larger/primary GIF variants. */
-function scoreMediaUrl(url: string, baseId?: string): number {
-    const lower = url.toLowerCase();
-    let score = 0;
-
-    if (lower.endsWith(".gif")) {
-        score += 70;
-    }
-
-    if (lower.includes("aaap")) {
-        score += 50;
-    }
-
-    if (lower.includes("aaaam")) {
-        score += 30;
-    }
-
-    if (lower.includes("aaaa")) {
-        score += 10;
-    }
-
-    if (baseId && lower.includes(`/${baseId.toLowerCase()}`)) {
-        score += 40;
-    }
-
-    return score;
-}
-
-/** Retrieves (and caches) content length for a media URL to improve candidate ranking. */
-async function getMediaContentLength(url: string): Promise<number> {
-    const now = Date.now();
-    const cached = gifContentLengthCache.get(url);
-    if (cached && cached.expiresAt > now) {
-        return cached.length;
-    }
-
-    try {
-        const head = await fetch(url, {
-            method: "HEAD",
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            signal: AbortSignal.timeout(GIF_PROBE_TIMEOUT_MS)
-        });
-
-        const headerValue = head.headers.get("content-length");
-        const parsed = headerValue ? Number(headerValue) : NaN;
-        const length = Number.isFinite(parsed) ? parsed : 0;
-        gifContentLengthCache.set(url, {
-            length,
-            expiresAt: now + GIF_PROBE_CACHE_TTL_MS
-        });
-        return length;
-    } catch {
-        gifContentLengthCache.set(url, {
-            length: 0,
-            expiresAt: now + GIF_PROBE_CACHE_TTL_MS
-        });
-        return 0;
-    }
-}
-
-/** Selects the best GIF candidate by combining URL heuristics with content-length probes. */
-async function chooseLargestGifCandidate(candidates: string[], baseId?: string): Promise<string | undefined> {
-    if (candidates.length === 0) {
-        return undefined;
-    }
-
-    const candidatesByHeuristic = candidates
-        .map((url) => ({ url, heuristic: scoreMediaUrl(url, baseId) }))
-        .sort((left, right) => right.heuristic - left.heuristic)
-        .slice(0, Math.min(GIF_PROBE_LIMIT, candidates.length));
-
-    const scored = await Promise.all(
-        candidatesByHeuristic.map(async ({ url, heuristic }) => {
-            const length = await getMediaContentLength(url);
-            return { url, score: heuristic + length };
-        })
-    );
-
-    scored.sort((left, right) => right.score - left.score);
-    return scored[0]?.url;
-}
-
-/** Resolves a Tenor view page to a direct media GIF URL and caches the result. */
-async function resolveTenorMediaAssetUrl(viewUrl: string): Promise<string | undefined> {
-    if (!viewUrl) {
-        return undefined;
-    }
-
-    if (tenorMediaCache.has(viewUrl)) {
-        const cached = tenorMediaCache.get(viewUrl);
-        return cached ?? undefined;
-    }
-
-    try {
-        const response = await fetch(viewUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            signal: AbortSignal.timeout(TENOR_VIEW_FETCH_TIMEOUT_MS)
-        });
-
-        if (!response.ok) {
-            tenorMediaCache.set(viewUrl, null);
-            return undefined;
-        }
-
-        const html = await response.text();
-
-        const decodeEscapedTenorUrl = (value: string): string =>
-            decodeHtmlEntities(value)
-                .replaceAll("\\u002F", "/")
-                .replaceAll("\\/", "/")
-                .replace(/^https:\/\//i, "https://");
-
-        const ogImageMatch =
-            html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ??
-            html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-
-        const ogImageUrl = decodeHtmlEntities(ogImageMatch?.[1] ?? "");
-
-        const baseId = (() => {
-            const token = getMediaToken(ogImageUrl);
-            return token ? getMediaBaseId(token) : undefined;
-        })();
-
-        const unescapedMatches = html.match(/https:\/\/(?:media|media1)\.tenor\.com\/[^"'\s>]+/gi) ?? [];
-        const escapedMatches =
-            html.match(/https:\\u002F\\u002F(?:media|media1)\.tenor\.com\\u002F[^"'\s>]+/gi) ?? [];
-
-        const mediaMatches = Array.from(
-            new Set([...unescapedMatches, ...escapedMatches].map((url) => decodeEscapedTenorUrl(url)))
-        ).filter((url) => /\.gif($|\?)/i.test(url));
-
-        if (mediaMatches.length === 0) {
-            tenorMediaCache.set(viewUrl, null);
-            return undefined;
-        }
-
-        const sameAssetMatches =
-            baseId && mediaMatches.length > 0
-                ? mediaMatches.filter((url) => {
-                    const token = getMediaToken(url);
-                    return token ? getMediaBaseId(token).toLowerCase() === baseId.toLowerCase() : false;
-                })
-                : [];
-
-        const candidatePool = sameAssetMatches.length > 0 ? sameAssetMatches : mediaMatches;
-        if (candidatePool.length > 0) {
-            const selected = await chooseLargestGifCandidate(candidatePool, baseId);
-
-            if (selected) {
-                tenorMediaCache.set(viewUrl, selected);
-                return selected;
-            }
-        }
-
-        tenorMediaCache.set(viewUrl, null);
-        return undefined;
-    } catch {
-        tenorMediaCache.set(viewUrl, null);
-        return undefined;
-    }
 }
 
 async function getRandomRustMemeMediaGifUrl(
@@ -326,7 +143,7 @@ async function getRandomRustMemeMediaGifUrl(
     const selectedCandidates: string[] = [];
 
     for (const viewUrl of limited) {
-        const mediaUrl = await resolveTenorMediaAssetUrl(viewUrl);
+        const mediaUrl = await tenorMedia.resolve(viewUrl, "best");
         if (mediaUrl) {
             selectedCandidates.push(mediaUrl);
         }
@@ -335,7 +152,7 @@ async function getRandomRustMemeMediaGifUrl(
     if (selectedCandidates.length === 0) {
         const remaining = shuffled.slice(limited.length);
         for (const viewUrl of remaining) {
-            const mediaUrl = await resolveTenorMediaAssetUrl(viewUrl);
+            const mediaUrl = await tenorMedia.resolve(viewUrl, "best");
             if (mediaUrl) {
                 selectedCandidates.push(mediaUrl);
                 if (selectedCandidates.length >= MAX_GIF_RESOLVE_ATTEMPTS) {
@@ -353,7 +170,7 @@ async function getRandomRustMemeMediaGifUrl(
         );
 
         for (const viewUrl of fallbackLimited) {
-            const mediaUrl = await resolveTenorMediaAssetUrl(viewUrl);
+            const mediaUrl = await tenorMedia.resolve(viewUrl, "best");
             if (mediaUrl) {
                 selectedCandidates.push(mediaUrl);
             }
@@ -362,7 +179,7 @@ async function getRandomRustMemeMediaGifUrl(
         if (selectedCandidates.length === 0) {
             const fallbackRemaining = fallbackShuffled.slice(fallbackLimited.length);
             for (const viewUrl of fallbackRemaining) {
-                const mediaUrl = await resolveTenorMediaAssetUrl(viewUrl);
+                const mediaUrl = await tenorMedia.resolve(viewUrl, "best");
                 if (mediaUrl) {
                     selectedCandidates.push(mediaUrl);
                     if (selectedCandidates.length >= MAX_GIF_RESOLVE_ATTEMPTS) {
@@ -448,20 +265,12 @@ async function sendMemeNotification(
     }
 
     try {
-        const gifResponse = await fetch(mediaGifUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            signal: AbortSignal.timeout(GIF_DOWNLOAD_TIMEOUT_MS)
-        });
-
-        if (!gifResponse.ok) {
+        const downloadedBuffer = await downloadMedia(mediaGifUrl, GIF_DOWNLOAD_TIMEOUT_MS);
+        if (!downloadedBuffer) {
             await textChannel.send({ content: fallbackContent });
             return;
         }
 
-        const downloadedBuffer = Buffer.from(await gifResponse.arrayBuffer());
         const gifBuffer = await upscaleGifIfNeeded(downloadedBuffer);
         const attachment = new AttachmentBuilder(gifBuffer, {
             name: `rust-meme-${Date.now()}.gif`

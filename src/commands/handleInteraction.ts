@@ -14,7 +14,8 @@ import {
     type ModalSubmitInteraction
 } from "discord.js";
 import type { AlertType, BotDb, GifMode, TimedAlertType } from "../db.js";
-import { decodeHtmlEntities, isValidTenorViewUrl, normalizeTenorViewUrl } from "../services/tenor.js";
+import { isValidTenorViewUrl, normalizeTenorViewUrl } from "../services/tenor.js";
+import { downloadMedia, tenorMedia } from "../services/tenorMedia.js";
 import type { DropsProvider } from "../providers/base.js";
 import { runDropsCycle } from "../scheduler.js";
 import { RARE_BEE_GIF_CHANCE, RARE_BEE_GIF_VIEW_URL } from "../services/rustGifAllowlist.js";
@@ -48,7 +49,7 @@ const BEE_QUIZ_ANSWER_BUTTON_PREFIX = "beequiz-answer";
 const BEE_QUIZ_MODAL_PREFIX = "beequiz-modal";
 const RESET_SECRETS_YES_BUTTON_PREFIX = "secrets-reset-yes";
 const RESET_SECRETS_NO_BUTTON_PREFIX = "secrets-reset-no";
-const TENOR_MEDIA_CACHE_TTL_MS = 10 * 60 * 1000;
+const GIF_DOWNLOAD_TIMEOUT_MS = 3000;
 const ALL_ALERT_TYPES: AlertType[] = ["alert_24h_6am", "alert_12h_6pm", "alert_1h", "alert_checkdrops"];
 const MAX_GIF_LIST_PREVIEW_ATTACHMENTS = 2;
 const ALERT_TYPE_TOKEN_MAP = new Map<string, AlertType>([
@@ -80,7 +81,6 @@ interface BeeQuizSession {
 
 const beeQuizSessions = new Map<string, BeeQuizSession>();
 const lastBeeQuizSignatureByUser = new Map<string, string>();
-const tenorMediaUrlCache = new Map<string, { mediaUrl?: string; expiresAt: number }>();
 
 const BEE_WORD_POOL: BeeQuizWord[] = [
     "antidisestablishmentarianism",
@@ -376,87 +376,18 @@ async function sendBeeQuizQuestion(
     await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
-/** Decodes escaped Tenor media URL fragments extracted from page sources. */
-function decodeEscapedTenorUrl(value: string): string {
-    return decodeHtmlEntities(value)
-        .replaceAll("\\u002F", "/")
-        .replaceAll("\\/", "/")
-        .replace(/^https:\/\//i, "https://");
-}
-
-/** Resolves a Tenor view URL to one direct GIF media URL, with small TTL cache. */
-async function resolveTenorGifMediaUrl(viewUrl: string): Promise<string | undefined> {
-    const cached = tenorMediaUrlCache.get(viewUrl);
-    const now = Date.now();
-    if (cached && cached.expiresAt > now) {
-        return cached.mediaUrl;
-    }
-
-    try {
-        const response = await fetch(viewUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            signal: AbortSignal.timeout(2500)
-        });
-
-        if (!response.ok) {
-            return undefined;
-        }
-
-        const html = await response.text();
-        const unescapedMatches = html.match(/https:\/\/(?:media|media1)\.tenor\.com\/[^"'\s>]+/gi) ?? [];
-        const escapedMatches =
-            html.match(/https:\\u002F\\u002F(?:media|media1)\.tenor\.com\\u002F[^"'\s>]+/gi) ?? [];
-
-        const candidates = Array.from(
-            new Set([...unescapedMatches, ...escapedMatches].map((url) => decodeEscapedTenorUrl(url)))
-        ).filter((url) => /\.gif($|\?)/i.test(url));
-
-        const mediaUrl = candidates[0];
-        tenorMediaUrlCache.set(viewUrl, {
-            mediaUrl,
-            expiresAt: now + TENOR_MEDIA_CACHE_TTL_MS
-        });
-        return mediaUrl;
-    } catch {
-        tenorMediaUrlCache.set(viewUrl, {
-            mediaUrl: undefined,
-            expiresAt: now + TENOR_MEDIA_CACHE_TTL_MS
-        });
-        return undefined;
-    }
-}
-
 /** Downloads a GIF media URL into a Discord attachment payload. */
 async function downloadGifAttachmentFromMediaUrl(
     mediaUrl: string,
     fileName: string
 ): Promise<AttachmentBuilder | undefined> {
-    try {
-        const response = await fetch(mediaUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            },
-            signal: AbortSignal.timeout(3000)
-        });
-
-        if (!response.ok) {
-            return undefined;
-        }
-
-        const buffer = Buffer.from(await response.arrayBuffer());
-        return new AttachmentBuilder(buffer, { name: fileName });
-    } catch {
-        return undefined;
-    }
+    const buffer = await downloadMedia(mediaUrl, GIF_DOWNLOAD_TIMEOUT_MS);
+    return buffer ? new AttachmentBuilder(buffer, { name: fileName }) : undefined;
 }
 
 /** Builds the anti-cheat GIF attachment used for the protected rare-bee URL path. */
 async function buildNoCheatingGifAttachment(): Promise<AttachmentBuilder | undefined> {
-    const mediaUrl = await resolveTenorGifMediaUrl(NO_CHEATING_GIF_VIEW_URL);
+    const mediaUrl = await tenorMedia.resolve(NO_CHEATING_GIF_VIEW_URL, "first");
     if (!mediaUrl) {
         return undefined;
     }
@@ -469,7 +400,7 @@ async function buildGifAttachmentFromViewUrl(
     viewUrl: string,
     fileName: string
 ): Promise<AttachmentBuilder | undefined> {
-    const mediaUrl = await resolveTenorGifMediaUrl(viewUrl);
+    const mediaUrl = await tenorMedia.resolve(viewUrl, "first");
     if (!mediaUrl) {
         return undefined;
     }
