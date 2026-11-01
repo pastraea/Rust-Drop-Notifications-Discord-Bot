@@ -167,6 +167,7 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
     $install = Import-Module (Join-Path $PSScriptRoot 'WindowsInstall.psm1') -PassThru
     & $install {
         $script:failUpdateBuild = $false
+        $script:updateCommands = @()
         function script:Get-InstallNodeTools {
             param($AllowNodeInstall)
             if ($AllowNodeInstall) { throw 'Updater must not install shared Node.js.' }
@@ -174,6 +175,7 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
         }
         function script:Invoke-InstallCommand {
             param($Executable, $Arguments, $Directory, $Label)
+            $script:updateCommands += ($Label + ': ' + ($Arguments -join ' '))
             if ($Label -eq 'Update build') {
                 if ($script:failUpdateBuild) { throw 'fixture build failure' }
                 New-Item -ItemType Directory -Path (Join-Path $Directory 'dist') | Out-Null
@@ -239,6 +241,10 @@ try { Start-Sleep -Seconds 30 } finally { $mutex.ReleaseMutex(); $mutex.Dispose(
     New-Item -ItemType Directory -Path $work | Out-Null
     Update-InstalledBot $repository $work $candidate $fixtureDownload
     Assert-Update ((Get-Content -LiteralPath (Join-Path $repository 'package.json') -Raw) -match '0.10.0') 'New version was not activated.'
+    $installCommands = @(& $install { $script:updateCommands })
+    $dependencyIndex = [array]::IndexOf($installCommands, 'Update dependency installation: ci --ignore-scripts --no-audit --no-fund')
+    Assert-Update ($dependencyIndex -ge 0) 'Update dependencies must install with --ignore-scripts so better-sqlite3 is never compiled from source.'
+    Assert-Update ([array]::IndexOf($installCommands, 'Update media tools installation: rebuild ffmpeg-static') -gt $dependencyIndex) 'Update must run the ffmpeg-static install step after the script-free install.'
     Assert-Update ((Get-Content -LiteralPath (Join-Path $repository '.env') -Raw) -match 'fixture-only-token') 'Update lost configuration.'
     foreach ($name in @('bot.db', 'bot.db-wal', 'bot.db-shm')) {
         Assert-Update ((Get-Content -LiteralPath (Join-Path $repository "data\$name") -Raw).Trim() -eq "retained-$name") "Update lost $name."

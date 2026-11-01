@@ -185,7 +185,9 @@ function Update-InstalledBot([string]$Repository, [string]$Work, $Release, [stri
     $install = Import-Module (Join-Path $PSScriptRoot 'WindowsInstall.psm1') -PassThru
     $tools = & $install { Get-InstallNodeTools $false }
     & $install { param($Tools, $Stage)
-        Invoke-InstallCommand $Tools.Npm @('ci', '--no-audit', '--no-fund') $Stage 'Update dependency installation'
+        # See Install-WindowsBotCore: skip install scripts (no C++ compiler needed), then run only ffmpeg-static's.
+        Invoke-InstallCommand $Tools.Npm @('ci', '--ignore-scripts', '--no-audit', '--no-fund') $Stage 'Update dependency installation'
+        Invoke-InstallCommand $Tools.Npm @('rebuild', 'ffmpeg-static') $Stage 'Update media tools installation'
         Invoke-InstallCommand $Tools.Npm @('run', 'build') $Stage 'Update build'
     } $tools $stage
     if (-not (Test-Path -LiteralPath (Join-Path $stage 'dist\index.js'))) { throw 'Update build did not produce the bot entry point.' }

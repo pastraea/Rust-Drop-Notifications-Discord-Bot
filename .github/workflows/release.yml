@@ -51,8 +51,15 @@ jobs:
           node-version: 22.x
           cache: npm
 
+      # Mirrors the installer: skip install scripts (npm would otherwise compile better-sqlite3 from source and
+      # fail without C++ build tools; its prebuilt binary ships in the package), then run ffmpeg-static's step.
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm rebuild ffmpeg-static
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Lint
         run: npm run lint

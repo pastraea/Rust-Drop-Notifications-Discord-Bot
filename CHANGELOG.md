@@ -24,6 +24,7 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 ### Changed
 
+- Fixed Windows installs and updates failing on computers without C++ build tools. npm ran `node-gyp rebuild` for `better-sqlite3` during `npm ci`, which fails without Visual Studio Build Tools and Python even though the package ships a prebuilt binary that the bot actually uses. Setup and the updater now run `npm ci --ignore-scripts` followed by `npm rebuild ffmpeg-static` (the only install step needed at runtime), and the new release workflow installs the same way. Verified in a clean folder: `better-sqlite3` loads from its prebuilt binary, ffmpeg downloads and runs, and the bot builds and starts.
 - Fixed upgrading databases whose `users` table predates the alert columns: the `users(auto_ping)` index was created before the column it indexes was added, so such a database failed to open. The index is now created after the column additions. Found by testing the new migration path against an old-style schema; earlier releases have the same ordering problem.
 - CI no longer runs twice for pull request branches: pushes are tested only on `main`, pull requests run on the PR, superseded PR runs are cancelled, and the workflow token is read-only.
 - Dependabot now groups npm minor/patch updates and GitHub Actions updates into single pull requests.

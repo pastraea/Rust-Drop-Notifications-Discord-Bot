@@ -77,8 +77,12 @@ Setup:
    - `DISCORD_CLIENT_ID` and `DISCORD_GUILD_ID` (for command deployment)
 3. Install dependencies:
    ```powershell
-   npm install
+   npm install --ignore-scripts
+   npm rebuild ffmpeg-static
    ```
+   `--ignore-scripts` stops npm from compiling `better-sqlite3` from source, which needs C++ build tools
+   (Visual Studio Build Tools and Python on Windows) even though the package ships a prebuilt binary.
+   `npm rebuild ffmpeg-static` then runs the one install step the bot needs (downloading ffmpeg).
 4. Register commands:
    ```powershell
    npm run deploy-commands
@@ -198,7 +202,7 @@ removed. Linux support is not implemented.
 Run setup **as administrator**, using the same Windows account that should run the
 bot. A different administrator account would own the resulting startup task and shortcuts.
 The installer copies its bundled bot files, not a download from source control.
-It requires internet access for `npm ci` and, if selected, Discord command registration.
+It requires internet access for `npm ci` (run with `--ignore-scripts`, followed by `npm rebuild ffmpeg-static`, so no C++ compiler is needed) and, if selected, Discord command registration.
 Node.js 22.12+ and npm are required. The optional Node.js checkbox uses Windows App
 Installer (`winget`) to download the exact `OpenJS.NodeJS.LTS` package if needed;
 Windows may request consent. If winget is absent, install Node.js LTS manually.
@@ -379,6 +383,10 @@ Common issues and fixes:
      `data/backups` (see [docs/runbook.md](docs/runbook.md)).
    - `Could not back up the database before upgrading it` means the pre-upgrade backup failed, so
      nothing was changed. Free disk space or fix permissions on the `data` folder and start again.
+
+6. `npm install`/`npm ci` fails with `node-gyp` or "Could not find any Visual Studio installation".
+   - npm tried to compile `better-sqlite3`, which is unnecessary. Install with
+     `npm ci --ignore-scripts` and then `npm rebuild ffmpeg-static`. The Windows setup does this itself.
 
 For operations-level response steps, see [docs/runbook.md](docs/runbook.md).
 

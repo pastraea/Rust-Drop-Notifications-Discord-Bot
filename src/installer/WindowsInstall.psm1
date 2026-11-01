@@ -443,7 +443,11 @@ function Install-WindowsBotCore($Plan) {
     New-Item -ItemType Directory -Path $stage | Out-Null
     try {
         Copy-BundledBot $fresh.Source $stage
-        Invoke-InstallCommand $tools.Npm @('ci', '--no-audit', '--no-fund') $stage 'Dependency installation'
+        # Install scripts are skipped because npm would otherwise compile better-sqlite3 from source, which
+        # fails without C++ build tools even though the package ships prebuilt binaries. ffmpeg-static is the
+        # only dependency whose install step is needed at runtime, so just that step is run afterwards.
+        Invoke-InstallCommand $tools.Npm @('ci', '--ignore-scripts', '--no-audit', '--no-fund') $stage 'Dependency installation'
+        Invoke-InstallCommand $tools.Npm @('rebuild', 'ffmpeg-static') $stage 'Media tools installation'
         Invoke-InstallCommand $tools.Npm @('run', 'build') $stage 'Bot build'
         if (-not (Test-Path -LiteralPath (Join-Path $stage 'dist\index.js'))) { throw 'Build did not produce the bot entry point.' }
         $validation = Join-Path $stage 'src\installer\validateConfiguration.cjs'

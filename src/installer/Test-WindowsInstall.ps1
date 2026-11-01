@@ -109,6 +109,7 @@ try {
     & $module {
         $script:fixtureScan = [pscustomobject]@{ Folders = @(); Findings = @(); Issues = @(); StartupIncomplete = $false }
         $script:events = @()
+        $script:commands = @()
         $script:failLabel = ''
         function script:Find-WindowsBotInstallations { param([switch]$DeepScan) $script:fixtureScan }
         function script:Assert-InstallAdministrator { $script:events += 'administrator' }
@@ -122,6 +123,7 @@ try {
         function script:Invoke-InstallCommand {
             param($Executable, $Arguments, $Directory, $Label)
             $script:events += $Label
+            $script:commands += ($Label + ': ' + ($Arguments -join ' '))
             if ($script:failLabel -eq $Label) { throw "$Label fixture failure" }
             if ($Label -eq 'Bot build') {
                 New-Item -ItemType Directory -Path (Join-Path $Directory 'dist') | Out-Null
@@ -220,6 +222,12 @@ try {
     $result = Install-WindowsBot $plan
     $events = @(& $module { $script:events })
     Assert-InstallTest ([array]::IndexOf($events, 'Bot build') -lt [array]::IndexOf($events, 'remove-old')) 'Destructive cleanup preceded build.'
+    $commands = @(& $module { $script:commands })
+    $dependencyIndex = [array]::IndexOf($commands, 'Dependency installation: ci --ignore-scripts --no-audit --no-fund')
+    $mediaIndex = [array]::IndexOf($commands, 'Media tools installation: rebuild ffmpeg-static')
+    Assert-InstallTest ($dependencyIndex -ge 0) 'Dependencies must install with --ignore-scripts so better-sqlite3 is never compiled from source (no C++ build tools are required).'
+    Assert-InstallTest ($mediaIndex -gt $dependencyIndex) 'The ffmpeg-static install step must run after the script-free dependency install.'
+    Assert-InstallTest (@($commands | Where-Object { $_ -match '^Dependency installation: ci ' -and $_ -notmatch '--ignore-scripts' }).Count -eq 0) 'No install may run npm scripts.'
     Assert-InstallTest ([array]::IndexOf($events, 'Discord command registration') -lt [array]::IndexOf($events, 'remove-old')) 'Command registration failure could destroy old installation.'
     Assert-InstallTest ($events -contains 'startup' -and $events -contains 'start-now') 'Selected startup/start options ignored.'
     Assert-InstallTest ([IO.File]::ReadAllText((Join-Path $options.Destination 'data\bot.db')).Trim() -eq 'fixture-database') 'Database not reused.'
