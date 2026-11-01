@@ -22,6 +22,10 @@
         "start": "node dist/index.js",
         "deploy-commands": "tsx src/commands/registerCommands.ts"
     },
+    "overrides": {
+        "glob": "^14.0.3",
+        "minimatch": "^11.0.3"
+    },
     "dependencies": {
         "better-sqlite3": "^13.0.3",
         "discord.js": "^14.26.4",
@@ -33,7 +37,7 @@
     "devDependencies": {
         "@biomejs/biome": "2.6.4",
         "@types/better-sqlite3": "^9.6.0",
-        "@types/node": "^26.6.5",
+        "@types/node": "^26.6.6",
         "c8": "^12.0.0",
         "tsx": "^4.23.15",
         "typescript": "^7.0.2"
