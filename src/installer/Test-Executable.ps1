@@ -56,10 +56,14 @@ try {
         $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($launcher.Id)" |
             Where-Object { $_.Name -eq 'powershell.exe' })
         if ($children.Count -eq 1) {
-            $child = Get-Process -Id $children[0].ProcessId -ErrorAction Stop
-            $child.Refresh()
-            if ($child.MainWindowHandle -ne [IntPtr]::Zero -and
-                $child.MainWindowTitle -eq 'Rust Drop Notifications Discord Bot Setup') { break }
+            # A short-lived helper process can exit between listing and inspection; if so, look again.
+            $candidate = Get-Process -Id $children[0].ProcessId -ErrorAction SilentlyContinue
+            if ($null -ne $candidate) {
+                $child = $candidate
+                $child.Refresh()
+                if ($child.MainWindowHandle -ne [IntPtr]::Zero -and
+                    $child.MainWindowTitle -eq 'Rust Drop Notifications Discord Bot Setup') { break }
+            }
         }
         Start-Sleep -Milliseconds 100
     } while (-not $launcher.HasExited -and [DateTime]::UtcNow -lt $deadline)
