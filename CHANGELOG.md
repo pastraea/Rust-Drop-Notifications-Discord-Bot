@@ -8,6 +8,17 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.4.4] - 2026-11-01
+
+### Changed
+
+- Removed a stray byte-order mark and a duplicate header comment from `src/services/reminderService.ts`, and added the missing final newline to `.env.example`, `LICENSE`, and `tsconfig.json`, matching `.editorconfig`.
+- Closed Dependabot PR #70 (`@types/node` 26.6.5 to 26.6.6) without merging, because 0.4.3 already includes that update.
+
+### Upgrade Notes
+
+- No functional, configuration, database, installer, or Discord command changes.
+
 ## [0.4.3] - 2026-11-01
 
 ### Security
