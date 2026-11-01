@@ -14,6 +14,7 @@ import {
     type ModalSubmitInteraction
 } from "discord.js";
 import type { AlertType, BotDb, GifMode, TimedAlertType } from "../db.js";
+import { decodeHtmlEntities, isValidTenorViewUrl, normalizeTenorViewUrl } from "../services/tenor.js";
 import type { DropsProvider } from "../providers/base.js";
 import { runDropsCycle } from "../scheduler.js";
 import { RARE_BEE_GIF_CHANCE, RARE_BEE_GIF_VIEW_URL } from "../services/rustGifAllowlist.js";
@@ -37,7 +38,6 @@ export interface InteractionDeps {
     providers: DropsProvider[];
 }
 
-const TENOR_VIEW_URL_REGEX = /^https:\/\/tenor\.com\/view\/[a-z0-9-]+/i;
 const GIF_LIST_PAGE_SIZE = 5;
 const NO_CHEATING_GIF_VIEW_URL =
     "https://tenor.com/view/you-wouldn%27t-ratatouille-piracy-it%27s-a-crime-piracy-is-stealing-meme-gif-11554142448863112842";
@@ -376,11 +376,6 @@ async function sendBeeQuizQuestion(
     await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
-/** Decodes limited HTML entities used in Tenor metadata fields. */
-function decodeHtmlEntities(value: string): string {
-    return value.replaceAll("&amp;", "&");
-}
-
 /** Decodes escaped Tenor media URL fragments extracted from page sources. */
 function decodeEscapedTenorUrl(value: string): string {
     return decodeHtmlEntities(value)
@@ -493,14 +488,6 @@ function buildGifWithSecretFooterEmbed(fileName: string, secretLines: string[]):
     }
 
     return embed;
-}
-
-function normalizeTenorViewUrl(url: string): string {
-    return url.trim().replace(/^https:\/\/https:\/\//i, "https://");
-}
-
-function isValidTenorViewUrl(url: string): boolean {
-    return TENOR_VIEW_URL_REGEX.test(url);
 }
 
 function normalizeTenorViewUrlForCompare(url: string): string {

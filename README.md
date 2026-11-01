@@ -403,6 +403,8 @@ Current commands:
 
 Current scope includes alert window behavior in [src/services/reminderService.test.ts](src/services/reminderService.test.ts#L1),
 Twitch campaign parsing in [src/providers/twitch.test.ts](src/providers/twitch.test.ts),
+Kick API/Facepunch discovery in [src/providers/kick.test.ts](src/providers/kick.test.ts),
+database behavior in [src/db.test.ts](src/db.test.ts),
 environment validation in [src/config.test.ts](src/config.test.ts), schema migrations and backups in
 [src/migrations.test.ts](src/migrations.test.ts), shutdown ordering in
 [src/shutdown.test.ts](src/shutdown.test.ts), and scheduler overlap/stop/failure handling in
@@ -413,9 +415,8 @@ manual snapshots, live alert dedupe, and failed-sync preservation.
 
 Not yet covered in depth:
 
-- Provider integration and parsing edge cases
-- DB persistence behavior and schema migration safety
-- End-to-end interaction command workflows
+- Twitch parsing under malformed upstream payloads
+- End-to-end interaction command workflows and GIF resolution
 
 See [docs/testing-strategy.md](docs/testing-strategy.md) for detailed strategy and next coverage targets.
 

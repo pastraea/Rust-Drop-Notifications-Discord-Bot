@@ -3,8 +3,12 @@
 ## Current Coverage
 
 Current automated tests cover alert-window timing in `src/services/reminderService.test.ts`,
-Twitch campaign parsing in `src/providers/twitch.test.ts`, environment validation in
-`src/config.test.ts`, graceful shutdown ordering in `src/shutdown.test.ts`, and scheduler
+Twitch campaign parsing in `src/providers/twitch.test.ts`, Kick API/Facepunch discovery in
+`src/providers/kick.test.ts`, the shared retry helper in `src/providers/http.test.ts`, Tenor URL
+helpers in `src/services/tenor.test.ts`, database behavior in `src/db.test.ts` (alert preferences and
+auto-ping, notification dedupe, retention pruning, campaign upsert/ending/queries, settings, custom
+GIFs, secrets, and watches), environment validation in
+`src/config.test.ts`, graceful shutdown ordering in `src/shutdown.test.ts`, scheduler
 overlap/stop/failure behavior in `src/scheduler.test.ts`, and schema migrations in
 `src/migrations.test.ts` (fresh, legacy, up-to-date, newer, failing, and backup-failure databases,
 rollback, backup contents and retention, and numbering rules). `npm run lint` runs Biome static analysis.
@@ -69,25 +73,20 @@ Covered areas:
 
 1. Provider tests
 
-- Twitch and Kick parser behavior under malformed/partial upstream payloads
-- fallback mode behavior when API/web sources fail
+- Twitch parser behavior under malformed/partial upstream payloads (Kick's API, Facepunch
+  fallback, channel discovery, caching, and failure handling are covered in `src/providers/kick.test.ts`)
 
-2. Database tests
-
-- user preference persistence
-- notification dedupe correctness
-- pruning behavior for retention windows
-
-3. Interaction tests
+2. Interaction tests
 
 - command routing and validation
 - permission-sensitive command behavior
 - error reply fallback behavior
+- the GIF resolution/download and Tenor scraping paths in `handleInteraction.ts` and `reminderService.ts`
 
-4. Scheduler and integration tests
+3. Integration tests
 
-- cycle concurrency guard behavior
-- end-to-end flow from provider sync to reminder dispatch
+- end-to-end flow from provider sync to reminder dispatch for timed alerts (live and manual
+  checkdrops flows are covered in `src/services/dropFlow.test.ts`)
 
 ## Test Commands
 

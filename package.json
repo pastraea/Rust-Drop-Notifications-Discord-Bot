@@ -1,6 +1,6 @@
 {
     "name": "rust-drops-reminder-bot",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "private": true,
     "description": "Discord reminder bot for Twitch and Kick Rust drops",
     "author": "Thomas Benton",

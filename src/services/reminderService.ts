@@ -6,6 +6,7 @@ import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import { GifCodec } from "gifwrap";
 import type { BotDb, TimedAlertType } from "../db.js";
+import { decodeHtmlEntities, isValidTenorViewUrl, normalizeTenorViewUrl } from "./tenor.js";
 import { getChannelsSummaryForDrop, getDropChannelConfidence, hasListedDropChannels } from "./announcementTargets.js";
 import {
     APPROVED_RUST_GIF_VIEW_URLS,
@@ -96,21 +97,6 @@ function shuffledCopy<T>(items: T[]): T[] {
     }
 
     return copy;
-}
-
-/** Normalizes Tenor view URLs and corrects malformed duplicated protocol prefixes. */
-function normalizeTenorViewUrl(url: string): string {
-    return url.trim().replace(/^https:\/\/https:\/\//i, "https://");
-}
-
-/** Validates whether a URL matches the expected Tenor view URL shape. */
-function isValidTenorViewUrl(url: string): boolean {
-    return /^https:\/\/tenor\.com\/view\/[a-z0-9-]+/i.test(url);
-}
-
-/** Decodes HTML entities encountered in scraped Tenor metadata. */
-function decodeHtmlEntities(value: string): string {
-    return value.replaceAll("&amp;", "&");
 }
 
 /** Extracts Tenor media token segment from a direct media URL. */

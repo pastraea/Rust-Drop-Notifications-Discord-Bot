@@ -1,4 +1,5 @@
 import type { DropsProvider } from "./base.js";
+import { fetchWithRetries } from "./http.js";
 import type { NormalizedDrop } from "../types.js";
 
 /**
@@ -86,7 +87,7 @@ export class KickDropsProvider implements DropsProvider {
 
         for (const endpoint of endpoints) {
             try {
-                const response = await this.fetchWithRetries(endpoint, {
+                const response = await fetchWithRetries(endpoint, {
                     method: "GET",
                     headers: {
                         "User-Agent": "Mozilla/5.0",
@@ -184,7 +185,7 @@ export class KickDropsProvider implements DropsProvider {
 
     /** Fetches Facepunch Kick campaign page HTML. */
     private async fetchCampaignPage(): Promise<string> {
-        const response = await this.fetchWithRetries(KICK_FACEPUNCH_URL, {
+        const response = await fetchWithRetries(KICK_FACEPUNCH_URL, {
             method: "GET",
             headers: {
                 "User-Agent": "Mozilla/5.0"
@@ -221,7 +222,7 @@ export class KickDropsProvider implements DropsProvider {
 
         for (const hash of hashes) {
             try {
-                const response = await this.fetchWithRetries(
+                const response = await fetchWithRetries(
                     `${KICK_FACEPUNCH_TILE_URL}${encodeURIComponent(hash)}`,
                     {
                         method: "GET",
@@ -336,29 +337,5 @@ export class KickDropsProvider implements DropsProvider {
         }
 
         return "active";
-    }
-
-    /** Performs retrying fetch requests for transient upstream/network failures. */
-    private async fetchWithRetries(input: string, init: RequestInit, maxAttempts = 2): Promise<Response> {
-        let lastError: unknown;
-
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-            try {
-                const response = await fetch(input, init);
-                if (response.ok || (response.status >= 400 && response.status < 500)) {
-                    return response;
-                }
-
-                lastError = new Error(`Request failed with status ${response.status}`);
-            } catch (error) {
-                lastError = error;
-            }
-
-            if (attempt < maxAttempts) {
-                await new Promise((resolve) => setTimeout(resolve, 250 + Math.random() * 250));
-            }
-        }
-
-        throw lastError instanceof Error ? lastError : new Error("Request failed after retries");
     }
 }

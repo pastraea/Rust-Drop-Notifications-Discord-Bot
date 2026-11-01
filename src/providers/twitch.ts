@@ -1,4 +1,5 @@
 import type { DropsProvider } from "./base.js";
+import { fetchWithRetries } from "./http.js";
 import type { NormalizedDrop } from "../types.js";
 
 /**
@@ -143,7 +144,7 @@ export class TwitchDropsProvider implements DropsProvider {
 
     /** Fetches the Facepunch Twitch campaign page HTML. */
     private async fetchCampaignPage(): Promise<string> {
-        const response = await this.fetchWithRetries(TWITCH_FACEPUNCH_URL, {
+        const response = await fetchWithRetries(TWITCH_FACEPUNCH_URL, {
             method: "GET",
             headers: {
                 "User-Agent": "Mozilla/5.0"
@@ -191,7 +192,7 @@ export class TwitchDropsProvider implements DropsProvider {
 
     /** Performs typed Helix GET requests with shared headers/timeouts. */
     private async helixGet<T>(path: string, token: string): Promise<T> {
-        const response = await this.fetchWithRetries(`https://api.twitch.tv/helix${path}`, {
+        const response = await fetchWithRetries(`https://api.twitch.tv/helix${path}`, {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -252,30 +253,6 @@ export class TwitchDropsProvider implements DropsProvider {
             endTime: new Date(endMs).toISOString(),
             status
         };
-    }
-
-    /** Performs retrying fetch requests for transient upstream/network failures. */
-    private async fetchWithRetries(input: string, init: RequestInit, maxAttempts = 2): Promise<Response> {
-        let lastError: unknown;
-
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-            try {
-                const response = await fetch(input, init);
-                if (response.ok || (response.status >= 400 && response.status < 500)) {
-                    return response;
-                }
-
-                lastError = new Error(`Request failed with status ${response.status}`);
-            } catch (error) {
-                lastError = error;
-            }
-
-            if (attempt < maxAttempts) {
-                await new Promise((resolve) => setTimeout(resolve, 250 + Math.random() * 250));
-            }
-        }
-
-        throw lastError instanceof Error ? lastError : new Error("Request failed after retries");
     }
 
     private isValidCampaignRange(startMs: number, endMs: number): boolean {

@@ -8,6 +8,23 @@ The format follows Keep a Changelog principles and this project uses Semantic Ve
 
 - No changes yet.
 
+## [0.4.2] - 2026-11-01
+
+### Added
+
+- Tests for the Kick provider (`src/providers/kick.test.ts`): API campaign normalization (ids, titles, channel de-duplication, explicit and time-derived statuses, ended campaigns dropped), wrapped API payload shapes, v2-to-v1 endpoint fallback, the Facepunch countdown fallback with channel discovery from the page and tiles (including URL-encoded hashes and caching), a failing tile not losing other channels, invalid and duplicate countdowns, and total failure reporting an error status.
+- Database behavior tests (`src/db.test.ts`): alert defaults and toggles, auto-ping recomputation, per-type and per-drop notification dedupe, retention pruning and its one-day floor, campaign upsert/ending/active/upcoming queries, settings and GIF mode fallbacks, per-user custom GIF ownership, secret discovery, and watches.
+- Tests for the shared retry helper (`src/providers/http.test.ts`) and Tenor URL helpers (`src/services/tenor.test.ts`).
+
+### Changed
+
+- The retrying fetch logic that was copy-pasted into the Twitch and Kick providers now lives in `src/providers/http.ts`. Behavior is unchanged: two attempts, network errors and 5xx responses are retried after a 250-500 ms jittered delay, and 4xx responses are returned immediately.
+- The Tenor URL helpers that were duplicated in the command handlers and the reminder service now live in `src/services/tenor.ts`. Behavior is unchanged.
+
+### Upgrade Notes
+
+- No configuration, database, installer, or Discord command changes.
+
 ## [0.4.1] - 2026-11-01
 
 ### Security
